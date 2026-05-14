@@ -1,0 +1,15 @@
+FROM --platform=linux/amd64 python:3.12-slim
+
+WORKDIR /app
+RUN pip install --no-cache-dir uv
+
+COPY pyproject.toml uv.lock README.md ./
+COPY src ./src
+COPY packages ./packages
+COPY examples/psi_simple ./examples/psi_simple
+
+RUN uv sync --package psi-simple
+
+EXPOSE 10002
+CMD ["uv", "run", "--package", "psi-simple", "python", "examples/psi_simple/initiator.py", "--port", "10002", "--host", "0.0.0.0", "--public-url", "http://initiator:10002", "--receiver", "http://receiver:10003"]
+

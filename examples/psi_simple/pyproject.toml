@@ -1,0 +1,21 @@
+[project]
+name = "psi-simple"
+version = "0.1.0"
+description = "Minimal AP3 PSI (Private Set Intersection) over A2A"
+requires-python = ">=3.11,<3.14"
+dependencies = [
+    "a2a-sdk[http-server]>=1.0.2",
+    "ap3[a2a]",
+    "ap3-functions",
+    "httpx>=0.28.1",
+    "pydantic>=2.11.4",
+    "starlette>=0.46.2",
+    "uvicorn>=0.34.2",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["."]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

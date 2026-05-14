@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PSI walkthrough · the two-stamp envelope</title>
+<style>
+:root {
+  --bg: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #f5f5f5;
+  --surface-3: #ececec;
+  --text: #1f1f1f;
+  --text-2: #555555;
+  --text-3: #888888;
+  --border: #e0e0e0;
+  --border-2: #cfcfcf;
+  --accent: #673ab7;
+  --accent-strong: #311b92;
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+main {
+  width: 100%;
+  margin: 0;
+  padding: 16px 20px 16px;
+}
+
+@media (max-width: 600px) {
+  main { padding: 12px 12px; }
+}
+
+#scene { display: block; width: 100%; height: auto; max-height: 340px; }
+
+.hero { margin-bottom: 32px; }
+
+.eyebrow {
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  margin-bottom: 12px;
+}
+
+h1 {
+  font-weight: 600;
+  font-size: clamp(28px, 4.5vw, 38px);
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  margin-bottom: 12px;
+  color: var(--accent-strong);
+}
+
+.lede {
+  font-size: 16px;
+  line-height: 1.55;
+  color: var(--text-2);
+  max-width: 620px;
+}
+
+.scene-wrap {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 18px;
+  margin-bottom: 14px;
+}
+
+.narration {
+  background: var(--surface-2);
+  border-radius: 6px;
+  padding: 14px 16px;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--text);
+  min-height: 78px;
+  margin-bottom: 14px;
+}
+
+.narration b { font-weight: 600; }
+.narration code {
+  font-family: var(--mono);
+  font-size: 13px;
+  background: var(--surface-3);
+  padding: 1px 6px;
+  border-radius: 3px;
+}
+.narration em { font-style: italic; color: var(--text-2); }
+
+.controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 40px;
+}
+
+button {
+  background: transparent;
+  border: 1px solid var(--border-2);
+  border-radius: 4px;
+  padding: 8px 14px;
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: background 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+}
+
+button:hover:not(:disabled) { background: var(--surface-2); border-color: var(--accent); color: var(--accent); }
+button:active:not(:disabled) { background: var(--surface-3); }
+button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+button svg { width: 14px; height: 14px; }
+
+.step-counter {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-3);
+  margin-left: auto;
+}
+
+.an { transition: transform 0.95s cubic-bezier(.4,0,.2,1), opacity 0.55s ease; }
+.match-glow { animation: glow 1.6s ease-in-out infinite; }
+@keyframes glow { 0%,100% { opacity: 0.45; } 50% { opacity: 1; } }
+
+.explainer {
+  border-top: 1px solid var(--border);
+  padding-top: 36px;
+}
+
+h2 {
+  font-weight: 600;
+  font-size: 22px;
+  line-height: 1.25;
+  letter-spacing: -0.005em;
+  margin-bottom: 18px;
+  max-width: 640px;
+  color: var(--accent-strong);
+}
+
+h3 {
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  margin: 28px 0 10px;
+}
+
+.explainer p {
+  font-size: 16px;
+  line-height: 1.7;
+  color: var(--text);
+  margin-bottom: 14px;
+  max-width: 640px;
+}
+
+.explainer code {
+  font-family: var(--mono);
+  font-size: 14px;
+  background: var(--surface-2);
+  padding: 1px 6px;
+  border-radius: 3px;
+}
+
+.math {
+  font-family: var(--mono);
+  font-size: 14px;
+  background: var(--surface-2);
+  border-left: 3px solid var(--accent);
+  padding: 16px 18px;
+  margin: 18px 0;
+  color: var(--text);
+  white-space: pre;
+  overflow-x: auto;
+  line-height: 1.8;
+  border-radius: 0 3px 3px 0;
+}
+
+.callout {
+  font-style: italic;
+  font-size: 16px;
+  line-height: 1.55;
+  color: var(--text-2);
+  border-left: 3px solid var(--accent);
+  padding: 4px 0 4px 16px;
+  margin: 22px 0;
+  max-width: 600px;
+}
+
+footer {
+  margin-top: 48px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text-3);
+}
+</style>
+</head>
+<body>
+
+<main>
+
+<header class="hero">
+  <h1>The two-stamp envelope analogy</h1>
+</header>
+
+<section class="scene-wrap" aria-label="Animated protocol walkthrough">
+<svg viewBox="0 0 680 340" id="scene" role="img" aria-labelledby="scene-title">
+<title id="scene-title">Step-by-step animation of the two-stamp envelope protocol between Consumer and Provider.</title>
+
+<text x="110" y="20" text-anchor="middle" font-size="13" font-weight="500" fill="#1F1F1F">Consumer · your side</text>
+<text x="110" y="35" text-anchor="middle" font-size="11" fill="#555555">querying about Mira</text>
+<text x="580" y="20" text-anchor="middle" font-size="13" font-weight="500" fill="#1F1F1F">Provider · their side</text>
+<text x="580" y="35" text-anchor="middle" font-size="11" fill="#555555">customer list</text>
+<line x1="170" y1="180" x2="510" y2="180" stroke="#cfcfcf" stroke-dasharray="3 4"/>
+<text x="340" y="172" text-anchor="middle" font-size="10" fill="#888888">mail</text>
+
+<g id="ob-record" class="an" opacity="1">
+<rect x="60" y="148" width="100" height="68" rx="6" fill="#ffffff" stroke="#cfcfcf" stroke-width="1"/>
+<text x="110" y="168" text-anchor="middle" font-size="12" font-weight="500" fill="#1F1F1F">Mira</text>
+<text x="110" y="184" text-anchor="middle" font-size="10" fill="#555555">#1042</text>
+<text x="110" y="200" text-anchor="middle" font-size="10" fill="#555555">14 Elm St</text>
+</g>
+
+<g id="ob-ball-group" class="an" opacity="0" transform="translate(0,0)">
+<circle id="ob-wrap" cx="110" cy="180" r="34" fill="rgba(103,58,183,0.18)" stroke="#673ab7" stroke-width="1.8" stroke-dasharray="5 3" opacity="0"/>
+<circle cx="110" cy="180" r="17" fill="#311b92" stroke="#1a0863" stroke-width="1"/>
+<g id="ob-stamp" opacity="0">
+<circle cx="130" cy="161" r="9.5" fill="#fce4ec" stroke="#ad1457" stroke-width="1.5"/>
+<text x="130" y="165" text-anchor="middle" font-size="10" font-weight="500" fill="#880e4f">B</text>
+</g>
+<text x="110" y="217" text-anchor="middle" font-size="10" fill="#888888">Mira</text>
+</g>
+
+<g id="bb-record-0" class="an" opacity="1">
+<rect x="530" y="55" width="100" height="36" rx="6" fill="#ffffff" stroke="#cfcfcf" stroke-width="1"/>
+<text x="580" y="71" text-anchor="middle" font-size="11" font-weight="500" fill="#1F1F1F">Mira</text>
+<text x="580" y="84" text-anchor="middle" font-size="9" fill="#555555">#1042 · 14 Elm</text>
+</g>
+<g id="bb-record-1" class="an" opacity="1">
+<rect x="530" y="118" width="100" height="36" rx="6" fill="#ffffff" stroke="#cfcfcf" stroke-width="1"/>
+<text x="580" y="134" text-anchor="middle" font-size="11" font-weight="500" fill="#1F1F1F">Theo</text>
+<text x="580" y="147" text-anchor="middle" font-size="9" fill="#555555">#2381 · 7 Park</text>
+</g>
+<g id="bb-record-2" class="an" opacity="1">
+<rect x="530" y="181" width="100" height="36" rx="6" fill="#ffffff" stroke="#cfcfcf" stroke-width="1"/>
+<text x="580" y="197" text-anchor="middle" font-size="11" font-weight="500" fill="#1F1F1F">Nia</text>
+<text x="580" y="210" text-anchor="middle" font-size="9" fill="#555555">#3127 · 22 Oak</text>
+</g>
+<g id="bb-record-3" class="an" opacity="1">
+<rect x="530" y="244" width="100" height="36" rx="6" fill="#ffffff" stroke="#cfcfcf" stroke-width="1"/>
+<text x="580" y="260" text-anchor="middle" font-size="11" font-weight="500" fill="#1F1F1F">Kai</text>
+<text x="580" y="273" text-anchor="middle" font-size="9" fill="#555555">#4456 · 9 Vine</text>
+</g>
+
+<g id="bb-ball-0" class="an" opacity="0">
+<circle cx="540" cy="73" r="14" fill="#311b92" stroke="#1a0863" stroke-width="1"/>
+<g id="bb-stamp-0" opacity="0">
+<circle cx="555" cy="60" r="8" fill="#fce4ec" stroke="#ad1457" stroke-width="1.3"/>
+<text x="555" y="64" text-anchor="middle" font-size="9" font-weight="500" fill="#880e4f">B</text>
+</g>
+<text x="572" y="77" font-size="11" fill="#888888">Mira</text>
+</g>
+<g id="bb-ball-1" class="an" opacity="0">
+<circle cx="540" cy="136" r="14" fill="#7e57c2" stroke="#4527a0" stroke-width="1"/>
+<g id="bb-stamp-1" opacity="0">
+<circle cx="555" cy="123" r="8" fill="#fce4ec" stroke="#ad1457" stroke-width="1.3"/>
+<text x="555" y="127" text-anchor="middle" font-size="9" font-weight="500" fill="#880e4f">B</text>
+</g>
+<text x="572" y="140" font-size="11" fill="#888888">Theo</text>
+</g>
+<g id="bb-ball-2" class="an" opacity="0">
+<circle cx="540" cy="199" r="14" fill="#5e35b1" stroke="#311b92" stroke-width="1"/>
+<g id="bb-stamp-2" opacity="0">
+<circle cx="555" cy="186" r="8" fill="#fce4ec" stroke="#ad1457" stroke-width="1.3"/>
+<text x="555" y="190" text-anchor="middle" font-size="9" font-weight="500" fill="#880e4f">B</text>
+</g>
+<text x="572" y="203" font-size="11" fill="#888888">Nia</text>
+</g>
+<g id="bb-ball-3" class="an" opacity="0">
+<circle cx="540" cy="262" r="14" fill="#9575cd" stroke="#5e35b1" stroke-width="1"/>
+<g id="bb-stamp-3" opacity="0">
+<circle cx="555" cy="249" r="8" fill="#fce4ec" stroke="#ad1457" stroke-width="1.3"/>
+<text x="555" y="253" text-anchor="middle" font-size="9" font-weight="500" fill="#880e4f">B</text>
+</g>
+<text x="572" y="266" font-size="11" fill="#888888">Kai</text>
+</g>
+
+<g id="match" class="an" opacity="0">
+<line x1="135" y1="178" x2="525" y2="78" stroke="#673ab7" stroke-width="1.5" stroke-dasharray="5 4" opacity="0.7"/>
+<circle cx="540" cy="73" r="22" fill="none" stroke="#673ab7" stroke-width="2.5" stroke-dasharray="4 3" class="match-glow"/>
+<g transform="translate(645, 73)">
+<circle r="11" fill="#ede7f6" stroke="#311b92" stroke-width="1"/>
+<path d="M -4 0 L -1 3 L 5 -4" fill="none" stroke="#311b92" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+</g>
+</svg>
+</section>
+
+<div class="narration" id="narration">…</div>
+
+<div class="controls">
+<button id="prev-btn" aria-label="previous step" type="button">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+Prev
+</button>
+<button id="next-btn" aria-label="next step" type="button">
+Next
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+</button>
+<button id="play-btn" aria-label="auto play" type="button">
+<svg id="play-icon" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4"/></svg>
+<span id="play-label">Play</span>
+</button>
+<button id="reset-btn" aria-label="reset" type="button">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+Reset
+</button>
+<span class="step-counter" id="step-counter">step 1 / 8</span>
+</div>
+
+</main>
+
+<script>
+(function(){
+  const obRecord = document.getElementById('ob-record');
+  const obBallGroup = document.getElementById('ob-ball-group');
+  const obWrap = document.getElementById('ob-wrap');
+  const obStamp = document.getElementById('ob-stamp');
+  const bbRecords = [0,1,2,3].map(i => document.getElementById('bb-record-'+i));
+  const bbBalls = [0,1,2,3].map(i => document.getElementById('bb-ball-'+i));
+  const bbStamps = [0,1,2,3].map(i => document.getElementById('bb-stamp-'+i));
+  const matchGroup = document.getElementById('match');
+  const narration = document.getElementById('narration');
+  const stepCounter = document.getElementById('step-counter');
+  const prevBtn = document.getElementById('prev-btn');
+  const nextBtn = document.getElementById('next-btn');
+  const playBtn = document.getElementById('play-btn');
+  const playLabel = document.getElementById('play-label');
+  const playIcon = document.getElementById('play-icon');
+  const resetBtn = document.getElementById('reset-btn');
+
+  const ICON_PLAY = '<polygon points="6 4 20 12 6 20 6 4"></polygon>';
+  const ICON_PAUSE = '<rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect>';
+
+  const steps = [
+    '<b>The setup.</b> Consumer has one customer record (Mira). Provider has its own customer list. The question — is Mira in Provider\'s list — must be answered without Provider seeing who Consumer asked about, and without Consumer seeing the rest of Provider\'s list.',
+    '<b>1 · hash-to-curve.</b> Each record deterministically becomes a point on an elliptic curve, drawn here as a colored ball. <code>Mira</code> always maps to the same ball; <code>Theo</code> always to a different one. Same input, same ball, every time.',
+    '<b>2 · Consumer wraps.</b> Consumer takes Mira\'s ball and seals it inside a fresh secret <code>A</code> (the dashed bubble). Only Consumer knows <code>A</code>.',
+    '<b>3 · mail to Provider.</b> The wrapped lump travels to Provider. Provider sees a colored blob it cannot see into — no idea Consumer is asking about Mira.',
+    '<b>4 · Provider stamps everything.</b> Provider applies its secret rubber stamp <code>B</code> to the wrapped lump <em>and</em> to every ball in its own list. The stamp is pressed hard enough to push through wrapper <code>A</code> and emboss the ball beneath.',
+    '<b>5 · return mail.</b> Provider ships back the doubly-covered lump (<code>A</code> + <code>B</code> over Mira) plus its own <code>B</code>-stamped customer list, and goes back to lunch.',
+    '<b>6 · Consumer peels off A.</b> Consumer removes its own wrapper. Mira\'s ball is left wearing only the <code>B</code> impression — pressed straight into the ball when Provider stamped it. The wrapper came off; the push mark stayed.',
+    '<b>7 · compare → match.</b> Consumer\'s <code>B</code>-stamped Mira matches the first ball in Provider\'s stamped list. Yes — Mira is a Provider customer. Provider never learned the question; Consumer never learned the rest of the list.'
+  ];
+
+  let cur = 0;
+  let playInterval = null;
+
+  function render(){
+    narration.innerHTML = steps[cur];
+    stepCounter.textContent = 'step ' + (cur+1) + ' / ' + steps.length;
+    obRecord.setAttribute('opacity', cur === 0 ? 1 : 0);
+    obBallGroup.setAttribute('opacity', cur >= 1 ? 1 : 0);
+    obWrap.setAttribute('opacity', (cur >= 2 && cur <= 5) ? 1 : 0);
+    obStamp.setAttribute('opacity', cur >= 4 ? 1 : 0);
+    obBallGroup.setAttribute('transform', (cur === 3 || cur === 4) ? 'translate(335,0)' : 'translate(0,0)');
+    bbRecords.forEach(r => r.setAttribute('opacity', cur === 0 ? 1 : 0));
+    bbBalls.forEach(b => b.setAttribute('opacity', cur >= 1 ? 1 : 0));
+    bbStamps.forEach(s => s.setAttribute('opacity', cur >= 4 ? 1 : 0));
+    matchGroup.setAttribute('opacity', cur === 7 ? 1 : 0);
+    prevBtn.disabled = cur === 0;
+    nextBtn.disabled = cur === steps.length - 1;
+  }
+
+  function stopPlay(){
+    if (playInterval){ clearInterval(playInterval); playInterval = null; }
+    playLabel.textContent = 'Play';
+    playIcon.innerHTML = ICON_PLAY;
+  }
+
+  nextBtn.onclick = () => { stopPlay(); if (cur < steps.length - 1){ cur++; render(); } };
+  prevBtn.onclick = () => { stopPlay(); if (cur > 0){ cur--; render(); } };
+  resetBtn.onclick = () => { stopPlay(); cur = 0; render(); };
+  playBtn.onclick = () => {
+    if (playInterval){ stopPlay(); return; }
+    if (cur === steps.length - 1) cur = 0;
+    render();
+    playLabel.textContent = 'Pause';
+    playIcon.innerHTML = ICON_PAUSE;
+    playInterval = setInterval(() => {
+      if (cur < steps.length - 1){ cur++; render(); }
+      else { stopPlay(); }
+    }, 2800);
+  };
+
+  render();
+})();
+</script>
+
+</body>
+</html>

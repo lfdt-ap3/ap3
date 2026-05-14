@@ -1,0 +1,22 @@
+services:
+  receiver:
+    build:
+      context: ../..
+      dockerfile: examples/psi_simple/Dockerfile.receiver
+    ports:
+      - "10003:10003"
+    volumes:
+      - receiver-data:/app/examples/psi_simple/data
+
+  initiator:
+    build:
+      context: ../..
+      dockerfile: examples/psi_simple/Dockerfile.initiator
+    depends_on:
+      - receiver
+    ports:
+      - "10002:10002"
+
+volumes:
+  receiver-data:
+

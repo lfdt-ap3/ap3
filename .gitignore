@@ -1,0 +1,49 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+.claude/
+.claude-flow/
+.mcp.json
+
+# Virtual environments
+.venv
+.agent_pids
+.DS_Store
+
+.env
+.pytest_cache
+
+# Sensitive / generated data files
+ap3_keys.json
+initiator.db
+receiver.db
+
+# Test coverage
+.coverage
+coverage.xml
+htmlcov/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+CLAUDE.md
+
+site/
+.wrangler/
+.dual-graph/
+
+# Local example/runtime artifacts (never commit)
+**/.adk/
+**/*.db
+**/*.sqlite
+**/*.sqlite3
+**/ap3_keys.json
+examples/psi_adk_simple/psi_receiver/data/

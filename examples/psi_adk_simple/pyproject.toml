@@ -1,0 +1,22 @@
+[project]
+name = "psi-adk-simple"
+version = "0.1.0"
+description = "Google ADK agents with AP3 PSI (Private Set Intersection)"
+requires-python = ">=3.11,<3.14"
+dependencies = [
+    "a2a-sdk[http-server]>=1.0.1",
+    "ap3[a2a]",
+    "ap3-functions",
+    "google-adk>=1.0.0",
+    "httpx>=0.28.1",
+    "pydantic>=2.11.4",
+    "starlette>=0.46.2",
+    "uvicorn>=0.34.2",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["psi_initiator", "psi_receiver"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

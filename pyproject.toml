@@ -1,0 +1,78 @@
+[project]
+name = "ap3"
+version = "1.2.1"
+description = "Agent Privacy-Preserving Protocol - AP3"
+readme = "README.md"
+license = { text = "Apache-2.0" }
+requires-python = ">=3.11,<3.14"
+dependencies = [
+    "pydantic>=2.0",
+    "httpx>=0.27.0",
+    "cryptography>=42.0.0",
+    "protobuf>=5.29.5,<6",
+]
+keywords = ["ap3", "privacy", "psi", "agents", "cryptography"]
+
+[project.urls]
+Homepage      = "https://github.com/lfdt-ap3/ap3"
+Documentation = "https://ap3-protocol.org"
+Repository    = "https://github.com/lfdt-ap3/ap3"
+Issues        = "https://github.com/lfdt-ap3/ap3/issues"
+
+[project.optional-dependencies]
+a2a = [
+    "a2a-sdk[http-server]>=1.0.2",
+    "grpcio>=1.60.0",
+    "uvicorn>=0.30.0",
+    "starlette>=0.37.0",
+    "protobuf>=5.29.5,<6",
+]
+test = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.1.0",
+    "pytest-mock>=3.11.0",
+]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.1.0",
+    "pytest-mock>=3.11.0",
+    "ruff>=0.1.0",
+    "mypy>=1.5.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ap3"]
+
+# ---------------------------------------------------------------------------
+# uv workspace — all members are developed together, published independently
+# ---------------------------------------------------------------------------
+[tool.uv.workspace]
+members = [
+    "packages/ap3-functions",
+    "examples/a2a-example/company_a",
+    "examples/a2a-example/company_b",
+    "examples/ap3_playground",
+    "examples/psi_adk_simple",
+    "examples/psi_simple"
+]
+
+[dependency-groups]
+dev = [
+    "ap3-functions",
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.1.0",
+    "pytest-mock>=3.11.0",
+    "ruff>=0.1.0",
+    "mypy>=1.5.0",
+]
+
+[tool.uv.sources]
+ap3-functions = { workspace = true }
+ap3 = { workspace = true }

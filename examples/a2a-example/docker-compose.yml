@@ -1,0 +1,53 @@
+services:
+  company_b:
+    build:
+      context: ../..
+      dockerfile: examples/a2a-example/company_b/Dockerfile
+    platform: linux/amd64
+    ports:
+      - "${COMPANY_B_PORT:-10003}:${COMPANY_B_PORT:-10003}"
+    volumes:
+      - company-b-data:/app/examples/a2a-example/company_b/data
+    environment:
+      HOST: "0.0.0.0"
+      PORT: "${COMPANY_B_PORT:-10003}"
+      CARD_URL: "http://company_b:${COMPANY_B_PORT:-10003}"
+    healthcheck:
+      test:
+        - "CMD-SHELL"
+        - "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:$$PORT/.well-known/agent-card.json', timeout=5)\""
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  company_a:
+    build:
+      context: ../..
+      dockerfile: examples/a2a-example/company_a/Dockerfile
+    platform: linux/amd64
+    depends_on:
+      company_b:
+        condition: service_healthy
+    ports:
+      - "${COMPANY_A_PORT:-10002}:${COMPANY_A_PORT:-10002}"
+    volumes:
+      - company-a-data:/app/examples/a2a-example/company_a/data
+    environment:
+      HOST: "0.0.0.0"
+      PORT: "${COMPANY_A_PORT:-10002}"
+      COMPANY_B_URL: "http://company_b:${COMPANY_B_PORT:-10003}"
+      CARD_URL: "http://company_a:${COMPANY_A_PORT:-10002}"
+    healthcheck:
+      test:
+        - "CMD-SHELL"
+        - "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:$$PORT/.well-known/agent-card.json', timeout=5)\""
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  company-a-data:
+  company-b-data:
+

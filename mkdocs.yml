@@ -1,0 +1,74 @@
+site_name: AP3 - Agent Privacy-Preserving Protocol
+site_url: https://ap3-protocol.org
+nav:
+  - Overview : index.md
+  - Architecture:
+    - Overview : architecture.md
+    - The Agentic Stack : agentic-stack.md
+    - Lifecycle : lifecycle.md
+    - A2A and AP3 : extension.md
+  - Core Concepts:
+    - Roles : roles.md
+    - Commitments : commitments.md
+    - Functions : operations.md
+    - Directives : directives.md
+  - Functions:
+    - PSI : functions/psi.md
+    - What's coming : functions/whats-coming.md
+  - SDK:
+    - Installation : sdk/installation.md
+    - Configuration : sdk/configuration.md
+    - API Reference : sdk/api-reference.md
+    - Troubleshooting : sdk/troubleshooting.md
+  - Cookbook:
+    - "Codelab: Sanctions check (Simple)" : codelab-privacy-agent.md
+    - "Codelab: Sanctions check via Middleware (Advanced)" : codelab-a2a-ap3.md
+  - Use Cases:
+    - Overview : use-cases/index.md
+    - Monetize Your Data : use-cases/monetize-with-service-provider.md
+    - Finance & Banking : use-cases/finance.md
+    - Reputation checks : use-cases/hr.md
+    - Supply Chain Evaluation : use-cases/fmcg.md
+  - W3C VC and AP3 : w3vc-ap3.md
+  - Security : security.md
+  - Samples : samples.md
+  - FAQ : faq.md
+  - Roadmap : roadmap.md
+theme:
+  name: material
+  logo: assets/logo.svg
+  favicon: assets/favicon.svg
+  features:
+    - navigation.footer
+    - navigation.expand
+    - search
+  palette:
+    primary: deep purple
+
+# Repository
+repo_name: AP3
+repo_url: https://github.com/lfdt-ap3/ap3
+
+# Copyright
+copyright: Copyright 2026 Silence Laboratories. Licensed under the Apache License, Version 2.0.
+
+markdown_extensions:
+  - attr_list
+  - admonition
+  - def_list
+  - pymdownx.details
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.tabbed:
+      alternate_style: true
+
+extra_javascript:
+  - javascript/mathjax.js
+  - https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js

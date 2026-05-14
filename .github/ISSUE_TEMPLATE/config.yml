@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security issues
+    url: https://github.com/lfdt-ap3/ap3/security/advisories
+    about: Please report security vulnerabilities privately (see SECURITY.md).

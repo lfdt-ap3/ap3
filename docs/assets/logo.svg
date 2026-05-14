@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" aria-hidden="true">
+  <g fill="#ffffff">
+    <!-- Plate -->
+    <rect x="1" y="27" width="30" height="1.5" rx="0.5"/>
+    <!-- Cake -->
+    <rect x="3" y="16" width="26" height="11" rx="1.5"/>
+    <!-- Candles -->
+    <rect x="8.4" y="10" width="1.2" height="6"/>
+    <rect x="15.4" y="10" width="1.2" height="6"/>
+    <rect x="22.4" y="10" width="1.2" height="6"/>
+    <!-- Flames -->
+    <path d="M9 10 Q7.8 7.5 9 4.5 Q10.2 7.5 9 10 Z"/>
+    <path d="M16 10 Q14.8 7.5 16 4.5 Q17.2 7.5 16 10 Z"/>
+    <path d="M23 10 Q21.8 7.5 23 4.5 Q24.2 7.5 23 10 Z"/>
+  </g>
+</svg>

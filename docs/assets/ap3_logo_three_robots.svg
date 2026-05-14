@@ -1,0 +1,26 @@
+<svg width="100%" viewBox="0 0 360 160" role="img" xmlns="http://www.w3.org/2000/svg">
+  <title>AP3 logo: three robot agents in a row</title>
+  <desc>Three identical robot heads arranged in a row, representing the three parties of a multi-party computation. Dashed channels between adjacent robots indicate the encrypted protocol link. Each robot has an antenna with a beacon, a sensor visor with two indicator eyes, and a small grille mouth.</desc>
+
+  <defs>
+    <g id="ap3-robot">
+      <line x1="0" y1="-30" x2="0" y2="-46" stroke="#262624" stroke-width="2" stroke-linecap="round"/>
+      <line x1="-5" y1="-46" x2="5" y2="-46" stroke="#262624" stroke-width="1.6" stroke-linecap="round"/>
+      <rect x="-3" y="-54" width="6" height="6" fill="#80aadd"/>
+      <rect x="-30" y="-30" width="60" height="56" rx="6" fill="#262624"/>
+      <rect x="-19" y="-7" width="38" height="7" rx="1" fill="#fafaf5"/>
+      <circle cx="-10" cy="-3.5" r="1.9" fill="#80aadd"/>
+      <circle cx="10" cy="-3.5" r="1.9" fill="#80aadd"/>
+      <line x1="-9" y1="9" x2="-9" y2="17" stroke="#fafaf5" stroke-width="1.6" stroke-linecap="round"/>
+      <line x1="0" y1="9" x2="0" y2="17" stroke="#fafaf5" stroke-width="1.6" stroke-linecap="round"/>
+      <line x1="9" y1="9" x2="9" y2="17" stroke="#fafaf5" stroke-width="1.6" stroke-linecap="round"/>
+    </g>
+  </defs>
+
+  <line x1="110" y1="90" x2="150" y2="90" stroke="#262624" stroke-width="1.5" stroke-dasharray="4 4" stroke-linecap="round" opacity="0.55"/>
+  <line x1="210" y1="90" x2="250" y2="90" stroke="#262624" stroke-width="1.5" stroke-dasharray="4 4" stroke-linecap="round" opacity="0.55"/>
+
+  <use href="#ap3-robot" x="80" y="90"/>
+  <use href="#ap3-robot" x="180" y="90"/>
+  <use href="#ap3-robot" x="280" y="90"/>
+</svg>

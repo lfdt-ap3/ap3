@@ -1,0 +1,110 @@
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;background:#0b1020;color:#e8eefc}
+
+.app{height:100vh}
+.view{display:none;height:100%}
+.view.view-active{display:block}
+
+.split{display:flex;height:100%}
+.left{width:38%;min-width:360px;border-right:1px solid rgba(255,255,255,.08);display:flex;flex-direction:column;min-height:0;overflow:hidden}
+.left-scroll{flex:1;min-height:0;overflow:auto;padding-bottom:16px}
+.right{flex:1;display:flex;flex-direction:column;min-width:0}
+
+.header{padding:16px 16px 8px;display:flex;align-items:flex-start;gap:12px}
+.header-actions{margin-left:auto}
+.title{font-size:18px;font-weight:700}
+.subtitle{font-size:12px;opacity:.7;margin-top:4px}
+
+button{background:#1a2757;border:1px solid rgba(255,255,255,.12);color:#e8eefc;border-radius:10px;padding:8px 10px;font-size:12px;cursor:pointer}
+button:hover{background:#22336f}
+button:disabled{opacity:.45;cursor:not-allowed}
+.ghost{background:transparent}
+
+.lab-shell{max-width:1100px;margin:0 auto;padding:18px 16px}
+.lab{padding:14px;border:1px solid rgba(255,255,255,.10);border-radius:14px;background:rgba(255,255,255,.04)}
+.lab-full{margin-top:14px}
+.lab-title{font-size:12px;font-weight:700;opacity:.9;margin-bottom:10px}
+.lab-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.lab-card{border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:10px;background:rgba(255,255,255,.03)}
+.lab-card-title{font-size:12px;font-weight:700;margin-bottom:8px}
+.lab-card label{display:block;font-size:11px;opacity:.75;margin:8px 0 4px}
+.lab-card select{width:100%;background:#0f1732;color:#e8eefc;border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:7px 8px;font-size:12px}
+.lab-result{margin-top:10px;font-size:12px;line-height:1.4;opacity:.95}
+.lab-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:12px;flex-wrap:wrap}
+
+.lab-preview{margin-top:12px}
+.lab-preview-title{font-size:12px;font-weight:700;opacity:.9;margin:8px 0}
+.lab-preview-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.lab-preview-card{border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:10px;background:rgba(255,255,255,.03);min-width:0}
+.lab-preview-card-title{font-size:12px;font-weight:700;margin-bottom:8px}
+
+.landing{margin-top:14px}
+.landing-hero{padding:14px;border:1px solid rgba(255,255,255,.10);border-radius:14px;background:rgba(255,255,255,.04)}
+.landing-title{font-size:12px;font-weight:800;opacity:.95;margin-bottom:8px}
+.landing-sub{font-size:12px;line-height:1.5;opacity:.9}
+.landing-steps{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+.landing-servers{margin-top:10px;padding:14px;border:1px solid rgba(255,255,255,.10);border-radius:14px;background:rgba(255,255,255,.04)}
+.landing-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.landing-card{border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:12px;background:rgba(255,255,255,.03);min-width:0}
+.landing-card-title{font-size:12px;font-weight:800;margin-bottom:10px}
+.landing-ol{margin:0;padding-left:18px;font-size:12px;line-height:1.6;opacity:.92}
+.landing-ol li{margin:6px 0}
+.landing-kv{display:grid;grid-template-columns:140px 1fr;gap:6px;font-size:12px}
+.landing-kv div{padding:6px 0;border-bottom:1px solid rgba(255,255,255,.06)}
+.landing-actions{display:flex;justify-content:flex-end;margin-top:12px}
+code{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);padding:2px 6px;border-radius:8px}
+
+.controls{display:flex;flex-wrap:wrap;gap:8px;padding:8px 16px 12px}
+.chat{padding:0 16px 16px}
+
+.walkthrough{margin:6px 16px 0;padding:12px;border:1px solid rgba(255,255,255,.10);border-radius:14px;background:rgba(255,255,255,.04)}
+.walkthrough-title{font-size:12px;font-weight:700;opacity:.9;margin-bottom:10px}
+.walkthrough-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 12px}
+.chk{font-size:12px;opacity:.92;display:flex;gap:8px;align-items:center}
+.chk input{transform:translateY(1px)}
+.walkthrough-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.walkthrough-step{margin-top:10px;font-size:12px;line-height:1.4;opacity:.95}
+
+.quick-scenarios{margin:6px 16px 0;border:1px solid rgba(255,255,255,.10);border-radius:14px;background:rgba(255,255,255,.04)}
+.quick-scenarios summary{cursor:pointer;list-style:none;padding:10px 12px;font-size:12px;font-weight:700;opacity:.9}
+.quick-scenarios summary::-webkit-details-marker{display:none}
+.quick-scenarios[open] summary{border-bottom:1px solid rgba(255,255,255,.08)}
+.quick-scenarios .controls{padding:10px 12px 12px}
+
+.bubble{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);padding:10px 12px;border-radius:12px;margin:8px 0;font-size:12px;line-height:1.4}
+.bubble.http-ix2rx{background:rgba(124,255,178,.08);border-color:rgba(124,255,178,.22)}
+.bubble.http-rx2ix{background:rgba(124,168,255,.10);border-color:rgba(124,168,255,.22)}
+.bubble.sys{opacity:.9}
+
+.tabs{display:flex;gap:6px;padding:10px;border-bottom:1px solid rgba(255,255,255,.08);flex-wrap:wrap}
+.tab{background:transparent;border:1px solid rgba(255,255,255,.10);padding:8px 10px;border-radius:10px;opacity:.8}
+.tab.active{background:#1a2757;opacity:1}
+
+.panel{flex:1;overflow:auto;min-width:0}
+.tab-panel{display:none;padding:14px}
+.tab-panel.active{display:block}
+
+pre{margin:0;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);padding:12px;border-radius:12px;overflow:auto;max-height:42vh}
+
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:stretch}
+.card{flex:1;min-width:320px;display:flex;flex-direction:column}
+.card pre{flex:1}
+.kv{display:grid;grid-template-columns:160px 1fr;gap:6px;font-size:12px}
+.kv div{padding:6px 0;border-bottom:1px solid rgba(255,255,255,.06)}
+
+.ok{color:#7CFFB2}
+.bad{color:#FF7C7C}
+
+@media (max-width: 980px){
+  .split{flex-direction:column}
+  .left{width:100%;min-width:0;border-right:none;border-bottom:1px solid rgba(255,255,255,.08);max-height:45vh}
+  .right{height:55vh}
+  .lab-grid{grid-template-columns:1fr}
+  .lab-preview-grid{grid-template-columns:1fr}
+  .walkthrough-grid{grid-template-columns:1fr}
+  .landing-steps{grid-template-columns:1fr}
+  .landing-grid{grid-template-columns:1fr}
+  pre{max-height:30vh}
+}
+

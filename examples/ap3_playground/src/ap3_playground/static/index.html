@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AP3 Playground</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="app">
+      <!-- Fullscreen Landing -->
+      <div id="view-landing" class="view view-active">
+        <div class="lab-shell">
+          <div class="header">
+            <div>
+              <div class="title">AP3 Playground</div>
+              <div class="subtitle">A guided, glass-box demo of AP3: discovery → compatibility → protocol run → inspection.</div>
+            </div>
+          </div>
+
+          <div class="landing">
+            <div class="landing-hero">
+              <div class="landing-title">What you’ll do here</div>
+              <div class="landing-sub">
+                This playground spins up two local AP3 agents, lets you configure their advertised capabilities, checks compatibility, then runs PSI and shows everything “under the hood” (HTTP, envelopes, directives, and receiver-side checks).
+              </div>
+            </div>
+
+            
+
+            <div class="landing-servers">
+              <div class="landing-title">Playground servers</div>
+              <div class="landing-grid">
+                <div class="landing-card">
+                  <div class="landing-card-title">Initiator agent</div>
+                  <div class="landing-kv">
+                    <div>A2A URL</div><div><code>http://127.0.0.1:18082</code></div>
+                    <div>AgentCard endpoint</div><div><code>/.well-known/agent-card.json</code></div>
+                  </div>
+                  <div class="landing-sub" style="margin-top:10px">
+                    Acts as the AP3 initiator and sends the first protocol envelope (msg1).
+                  </div>
+                </div>
+                <div class="landing-card">
+                  <div class="landing-card-title">Receiver agent</div>
+                  <div class="landing-kv">
+                    <div>A2A URL</div><div><code>http://127.0.0.1:18083</code></div>
+                    <div>AgentCard endpoint</div><div><code>/.well-known/agent-card.json</code></div>
+                  </div>
+                  <div class="landing-sub" style="margin-top:10px">
+                    Validates the intent + envelope (session binding, signature, participants, msg1 hash, replay) and responds.
+                  </div>
+                </div>
+              </div>
+              <div class="landing-sub" style="margin-top:10px">
+                The playground UI talks to these agents and captures A2A HTTP to populate the Inspector.
+              </div>
+            </div>
+
+            <div class="landing-steps">
+              <div class="landing-card">
+                <div class="landing-card-title">Flow</div>
+                <ol class="landing-ol">
+                  <li><b>Discovery</b>: read AgentCards + AP3 extension (roles, ops, commitments, public key)</li>
+                  <li><b>Compatibility</b>: score + explanation (why compatible / incompatible)</li>
+                  <li><b>Protocol run</b>: execute PSI over A2A JSON-RPC</li>
+                  <li><b>Inspector</b>: view request, HTTP trace, envelopes, directives, audit checks, logs</li>
+                </ol>
+              </div>
+              <!-- <div class="landing-card">
+                <div class="landing-card-title">Why this exists</div>
+                <div class="landing-sub">
+                  The goal is to make AP3 easier to learn by letting you see exactly what is signed, what is verified on the receiver, and how tamper / replay defenses behave.
+                </div>
+              </div> -->
+            </div>
+
+            <div class="landing-actions">
+              <button id="btn-go-lab">Next: Compatibility Lab</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Fullscreen Compatibility Lab -->
+      <div id="view-lab" class="view">
+        <div class="lab-shell">
+          <div class="header">
+            <div>
+              <div class="title">AP3 Playground</div>
+              <div class="subtitle">Start with Compatibility Lab, then inspect protocol runs.</div>
+            </div>
+          </div>
+
+          <div class="lab lab-full">
+            <div class="lab-title">Compatibility Lab</div>
+            <div class="lab-grid">
+              <div class="lab-card">
+                <div class="lab-card-title">Initiator</div>
+                <label>role</label>
+                <select id="lab-i-role">
+                  <option value="ap3_initiator" selected>ap3_initiator</option>
+                  <option value="ap3_receiver">ap3_receiver</option>
+                </select>
+                <label>supported ops (advertised)</label>
+                <select id="lab-i-ops">
+                  <option value="PSI" selected>PSI</option>
+                  <option value="PIR">PIR (mismatch demo)</option>
+                  <option value="">(none)</option>
+                </select>
+                <label>commitment data_structure</label>
+                <select id="lab-i-structure">
+                  <option value="customer_list" selected>customer_list</option>
+                  <option value="blacklist">blacklist</option>
+                  <option value="transaction_log">transaction_log</option>
+                </select>
+                <label>data_freshness</label>
+                <select id="lab-i-freshness">
+                  <option value="real_time" selected>real_time</option>
+                  <option value="daily">daily</option>
+                  <option value="weekly">weekly</option>
+                </select>
+                <label>industry</label>
+                <select id="lab-i-industry">
+                  <option value="finance" selected>finance</option>
+                  <option value="other">other</option>
+                </select>
+              </div>
+              <div class="lab-card">
+                <div class="lab-card-title">Receiver</div>
+                <label>role</label>
+                <select id="lab-r-role">
+                  <option value="ap3_receiver" selected>ap3_receiver</option>
+                  <option value="ap3_initiator">ap3_initiator</option>
+                </select>
+                <label>supported ops (advertised)</label>
+                <select id="lab-r-ops">
+                  <option value="PSI" selected>PSI</option>
+                  <option value="PIR">PIR (mismatch demo)</option>
+                  <option value="">(none)</option>
+                </select>
+                <label>commitment data_structure</label>
+                <select id="lab-r-structure">
+                  <option value="blacklist" selected>blacklist</option>
+                  <option value="customer_list">customer_list</option>
+                  <option value="transaction_log">transaction_log</option>
+                </select>
+                <label>data_freshness</label>
+                <select id="lab-r-freshness">
+                  <option value="real_time" selected>real_time</option>
+                  <option value="daily">daily</option>
+                  <option value="weekly">weekly</option>
+                </select>
+                <label>industry</label>
+                <select id="lab-r-industry">
+                  <option value="finance" selected>finance</option>
+                  <option value="other">other</option>
+                </select>
+              </div>
+            </div>
+            <div id="lab-result" class="lab-result">Computing compatibility…</div>
+
+            <div class="lab-preview">
+              <div class="lab-preview-title">AgentCards (preview)</div>
+              <div class="lab-preview-grid">
+                <div class="lab-preview-card">
+                  <div class="lab-preview-card-title">Initiator AgentCard JSON</div>
+                  <pre id="lab-i-card-json"></pre>
+                </div>
+                <div class="lab-preview-card">
+                  <div class="lab-preview-card-title">Receiver AgentCard JSON</div>
+                  <pre id="lab-r-card-json"></pre>
+                </div>
+              </div>
+            </div>
+
+            <div class="lab-actions">
+              <button id="btn-go-scenarios" disabled>Test scenarios</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Split-pane Playground + Inspector -->
+      <div id="view-playground" class="view">
+        <div class="split">
+          <div class="left">
+            <div class="header">
+              <div>
+                <div class="title">AP3 Playground</div>
+                <div class="subtitle">Inspector + Playground</div>
+              </div>
+              <div class="header-actions">
+                <button id="btn-back-lab" class="ghost">Back to lab</button>
+              </div>
+            </div>
+
+            <div class="left-scroll">
+              <div class="walkthrough">
+                <div class="walkthrough-title">Walkthrough</div>
+                <div id="outcome-card" class="walkthrough-step"></div>
+                <div class="walkthrough-grid">
+                  <div style="font-size:12px;opacity:.92;font-weight:700">PSI outcome</div>
+                  <div class="chk" style="grid-column:1/-1;gap:12px;align-items:flex-start">
+                    <label class="chk"><input name="psi-outcome" id="psi-success" type="radio" checked /> Successful PSI (intersection exists)</label>
+                    <label class="chk"><input name="psi-outcome" id="psi-fail" type="radio" /> Unsuccessful PSI (no intersection)</label>
+                  </div>
+                  <div style="font-size:12px;opacity:.92;font-weight:700;margin-top: 8px;">Attacks</div>
+                  <div class="chk" style="grid-column:1/-1;gap:12px;align-items:flex-start">
+                  <label class="chk"><input id="atk-session-id" type="checkbox" /> Tamper envelope.session_id</label>
+                  <label class="chk"><input id="atk-participants" type="checkbox" /> Tamper intent participants</label>
+                  <label class="chk"><input id="atk-msg1" type="checkbox" /> Tamper msg1 payload (hash mismatch)</label>
+                </div>
+                </div>
+                <div id="psi-data" class="walkthrough-step"></div>
+                <div class="walkthrough-actions">
+                  <button id="btn-walkthrough-start">Start walkthrough</button>
+                  <button id="btn-walkthrough-prev" class="ghost" disabled>Prev</button>
+                  <button id="btn-walkthrough-next" disabled>Next</button>
+                  <button id="btn-walkthrough-reset" class="ghost" style="display:none">Reset walkthrough</button>
+                </div>
+                <div id="walkthrough-step" class="walkthrough-step">Not started.</div>
+              </div>
+              <div class="chat">
+                <div id="chat-log"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="right">
+            <div class="tabs">
+              <button class="tab active" data-tab="flow">Flow</button>
+              <button class="tab" data-tab="agentcard">AgentCard</button>
+              <button class="tab" data-tab="a2ahttp">A2A HTTP</button>
+              <button class="tab" data-tab="envelope">Envelope</button>
+              <button class="tab" data-tab="directives">Directives</button>
+              <button class="tab" data-tab="audit">Audit</button>
+              <button class="tab" data-tab="logs">Logs</button>
+            </div>
+            <div class="panel">
+              <div id="panel-flow" class="tab-panel active"></div>
+              <div id="panel-a2ahttp" class="tab-panel"></div>
+              <div id="panel-agentcard" class="tab-panel"></div>
+              <div id="panel-envelope" class="tab-panel"></div>
+              <div id="panel-directives" class="tab-panel"></div>
+              <div id="panel-audit" class="tab-panel"></div>
+              <div id="panel-logs" class="tab-panel"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script src="/static/app.js"></script>
+  </body>
+</html>
+
