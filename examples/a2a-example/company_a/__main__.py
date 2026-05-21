@@ -80,6 +80,7 @@ if __name__ == '__main__':
             AgentInterface(
                 protocol_binding='JSONRPC',
                 url=_self_url,
+                protocol_version='1.0',
             )
         ],
         skills=[skill],  # Only the basic skill for the public card
@@ -102,6 +103,7 @@ if __name__ == '__main__':
             AgentInterface(
                 protocol_binding='JSONRPC',
                 url=_self_url,
+                protocol_version='1.0',
             )
         ],
         skills=[

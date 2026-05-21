@@ -51,6 +51,8 @@ class WalkState:
     internal_sid: Optional[str] = None
     intent_payload: Optional[dict[str, Any]] = None
     msg1_outgoing: Optional[dict[str, Any]] = None
+    first_envelope: Optional[ProtocolEnvelope] = None
+    attacks: Optional[dict[str, Any]] = None
     reply: Optional[ProtocolEnvelope] = None
     trace_base: Optional[Trace] = None
     http_capture: list[dict[str, Any]] = None  # type: ignore[assignment]
@@ -102,7 +104,9 @@ def _card(url: str, *, name: str) -> AgentCard:
         version="1.0.0",
         capabilities=AgentCapabilities(streaming=True),
     )
-    c.supported_interfaces.append(AgentInterface(url=url, protocol_binding="JSONRPC"))
+    c.supported_interfaces.append(
+        AgentInterface(url=url, protocol_binding="JSONRPC", protocol_version="1.0")
+    )
     return c
 
 
@@ -299,12 +303,30 @@ def _card_to_dict(card: AgentCard) -> dict[str, Any]:
                 "params": params,
             }
         )
-    ifaces = [{"url": i.url, "protocol_binding": i.protocol_binding} for i in card.supported_interfaces]
+    ifaces = [
+        {
+            "url": i.url,
+            "protocol_binding": i.protocol_binding,
+            "protocol_version": i.protocol_version,
+        }
+        for i in card.supported_interfaces
+    ]
+    skills = [
+        {
+            "id": s.id,
+            "name": s.name,
+            "description": s.description,
+            "tags": list(s.tags),
+            "examples": list(s.examples),
+        }
+        for s in card.skills
+    ]
     return {
         "name": card.name,
         "description": card.description,
         "version": card.version,
         "supported_interfaces": ifaces,
+        "skills": skills,
         "capabilities": {
             "streaming": bool(card.capabilities.streaming),
             "extensions": exts,
@@ -323,6 +345,150 @@ def _ap3_ext_decoded(card: AgentCard) -> Optional[dict[str, Any]]:
     return None
 
 
+_PSI_HASH_SIZE = 32
+_PSI_SESSION_ID_SIZE = 32
+
+_PSI_PHASE_EXPLAINERS = {
+    "init": (
+        "Initiator commits to a random 32-byte sid_0 by sending sha256(sid_0 || blind_value). "
+        "This binds sid_0 before the receiver picks its own session contribution, so the "
+        "initiator can't grind the joint session_id later."
+    ),
+    "msg0": (
+        "Receiver picks its own random 32-byte sid_1 and sends it in the clear. The joint "
+        "session_id is now sha256(label || sid_0 || sid_1) — both sides can compute it, "
+        "neither side picked it alone."
+    ),
+    "msg1": (
+        "Initiator opens the commitment (proving the sid_0 it committed to in `init`) and "
+        "sends the PSI-blinded customer hash. Layout: sid_0 (32B) || blind_value (32B) || psc_msg1."
+    ),
+    "msg2": (
+        "Receiver computes the blinded intersection of the customer's blinded hash against "
+        "each sanction-list entry's blinded hash and sends the result. The customer record "
+        "itself never appears in plaintext on the wire."
+    ),
+}
+
+
+def _psi_decode_payload(phase: str, payload: Any) -> Optional[dict[str, Any]]:
+    """Decode a PSI envelope payload into structural segments. Wire-level only."""
+    if not isinstance(payload, str):
+        return None
+    try:
+        raw = base64.b64decode(payload.encode("utf-8"))
+    except Exception:
+        return None
+    total = len(raw)
+    out: dict[str, Any] = {
+        "phase": phase,
+        "explainer": _PSI_PHASE_EXPLAINERS.get(phase, ""),
+        "bytes": total,
+        "sha256": hashlib.sha256(raw).hexdigest(),
+    }
+    if phase == "init" and total == _PSI_HASH_SIZE:
+        out["segments"] = [
+            {"name": "commitment", "bytes": _PSI_HASH_SIZE, "hex": raw.hex(),
+             "note": "sha256(sid_0 || blind_value) — opens in msg1"}
+        ]
+    elif phase == "msg0" and total == _PSI_SESSION_ID_SIZE:
+        out["segments"] = [
+            {"name": "sid_1", "bytes": _PSI_SESSION_ID_SIZE, "hex": raw.hex(),
+             "note": "receiver's random session contribution (in the clear)"}
+        ]
+    elif phase == "msg1" and total >= _PSI_SESSION_ID_SIZE + _PSI_HASH_SIZE:
+        sid_0 = raw[:_PSI_SESSION_ID_SIZE]
+        blind = raw[_PSI_SESSION_ID_SIZE:_PSI_SESSION_ID_SIZE + _PSI_HASH_SIZE]
+        psc = raw[_PSI_SESSION_ID_SIZE + _PSI_HASH_SIZE:]
+        out["segments"] = [
+            {"name": "sid_0", "bytes": _PSI_SESSION_ID_SIZE, "hex": sid_0.hex(),
+             "note": "opens the commitment from `init`"},
+            {"name": "blind_value", "bytes": _PSI_HASH_SIZE, "hex": blind.hex(),
+             "note": "blinding factor used in `init`'s commit"},
+            {"name": "psc_msg1", "bytes": len(psc), "sha256": hashlib.sha256(psc).hexdigest(),
+             "note": "Ristretto255 group elements + zk proof (opaque at wire level — see ap3_functions/psi/psi_internal/psc_protocol.py)"},
+        ]
+    elif phase == "msg2":
+        out["segments"] = [
+            {"name": "psc_msg2", "bytes": total, "sha256": out["sha256"],
+             "note": "blinded intersection result + zk proof (opaque at wire level)"},
+        ]
+    return out
+
+
+def _trace_json(trace: dict[str, Any], **kw: Any) -> JSONResponse:
+    """JSONResponse wrapper that augments trace with PSI internals before sending."""
+    _attach_psi_internals(trace)
+    return JSONResponse(trace, **kw)
+
+
+# Sharable run storage. In-memory, 24h TTL, capped — fits the playground scope.
+# Resets on process restart; not durable on purpose.
+_SAVED_RUNS: dict[str, tuple[float, dict[str, Any]]] = {}
+_SAVED_RUNS_TTL_S = 24 * 60 * 60
+_SAVED_RUNS_MAX = 200
+
+
+def _sweep_saved_runs() -> None:
+    now = time.time()
+    # Drop expired entries.
+    expired = [k for k, (ts, _) in _SAVED_RUNS.items() if (now - ts) > _SAVED_RUNS_TTL_S]
+    for k in expired:
+        _SAVED_RUNS.pop(k, None)
+    # Cap total — drop oldest until under the limit.
+    if len(_SAVED_RUNS) > _SAVED_RUNS_MAX:
+        ordered = sorted(_SAVED_RUNS.items(), key=lambda kv: kv[1][0])
+        for k, _ in ordered[: len(_SAVED_RUNS) - _SAVED_RUNS_MAX]:
+            _SAVED_RUNS.pop(k, None)
+
+
+async def save_run_api(request: Any) -> Response:
+    payload = await request.json()
+    trace = payload.get("trace")
+    if not isinstance(trace, dict):
+        return JSONResponse({"ok": False, "error": "missing or invalid trace"}, status_code=400)
+    _sweep_saved_runs()
+    run_id = uuid.uuid4().hex[:12]
+    _SAVED_RUNS[run_id] = (time.time(), trace)
+    return JSONResponse({"ok": True, "run_id": run_id})
+
+
+async def load_run_api(request: Any) -> Response:
+    run_id = request.path_params.get("run_id", "")
+    _sweep_saved_runs()
+    entry = _SAVED_RUNS.get(run_id)
+    if entry is None:
+        return JSONResponse({"ok": False, "error": "run not found or expired"}, status_code=404)
+    _, trace = entry
+    return JSONResponse({"ok": True, "trace": trace})
+
+
+def _attach_psi_internals(trace: dict[str, Any]) -> dict[str, Any]:
+    """Augment a trace with per-phase PSI payload decode. Idempotent."""
+    rounds: list[dict[str, Any]] = []
+    seen_phases: set[str] = set()
+    for env in trace.get("envelopes", []) or []:
+        phase = env.get("phase")
+        if not isinstance(phase, str) or phase in seen_phases or phase == "error":
+            continue
+        # Use the full payload (preview is truncated for display).
+        payload = env.get("payload")
+        decoded = _psi_decode_payload(phase, payload)
+        if decoded is not None:
+            decoded["dir"] = env.get("dir")
+            rounds.append(decoded)
+            seen_phases.add(phase)
+    trace["psi_internals"] = {
+        "rounds": rounds,
+        "note": (
+            "Wire-level decode only. Group elements inside psc_msg1 / psc_msg2 are "
+            "Ristretto255 points + zk proofs — their internal layout lives in "
+            "ap3_functions/psi/psi_internal/psc_protocol.py."
+        ),
+    }
+    return trace
+
+
 def _envelope_to_dict(env: ProtocolEnvelope) -> dict[str, Any]:
     payload_hash = _sha256_hex(env.payload)
     payload_bytes = (
@@ -332,6 +498,7 @@ def _envelope_to_dict(env: ProtocolEnvelope) -> dict[str, Any]:
         "operation": env.operation,
         "phase": env.phase,
         "session_id": env.session_id,
+        "payload": env.payload,
         "payload_preview": (env.payload[:160] + "…") if isinstance(env.payload, str) and len(env.payload) > 160 else env.payload,
         "payload_sha256": payload_hash,
         "payload_bytes": len(payload_bytes),
@@ -544,9 +711,13 @@ async def _run_scenario(scenario: SCENARIOS) -> Trace:
             "result": {"ok": False, "error": str(e)},
         }
 
-    # If replay scenario, re-send captured first envelope directly (receiver-side replay cache).
+    # If replay scenario, re-send captured first envelope directly. The
+    # receiver's per-round dedupe cache (30min TTL) would otherwise return the
+    # cached reply for a bit-perfect re-send; clear it to simulate a
+    # post-retry-window replay so the intent-replay defense (24h TTL) fires.
     if (scenario == "replay" or attacks.get("replay")) and first_envelope.get("envelope") is not None:
-        audit_step("replay.second_send", True, note="resending same intent+msg1")
+        receiver_agent._core._round_dedupe_cache.clear()  # type: ignore[attr-defined]
+        audit_step("replay.second_send", True, note="resending same intent+envelope (dedupe cache cleared to simulate post-retry-window)")
         try:
             reply = await receiver_agent.handle_envelope(first_envelope["envelope"])  # type: ignore[index]
             if reply is not None:
@@ -647,6 +818,7 @@ def _preview_agent_cards(lab: dict[str, Any]) -> dict[str, Any]:
         skill_name="preview",
         skill_description="preview",
         skill_examples=[],
+        skill_tags=["ap3", "preview"],
         roles=[i_role],
         supported_operations=i_ops,
         commitments=[i_commit],
@@ -662,6 +834,7 @@ def _preview_agent_cards(lab: dict[str, Any]) -> dict[str, Any]:
         skill_name="preview",
         skill_description="preview",
         skill_examples=[],
+        skill_tags=["ap3", "preview"],
         roles=[r_role],
         supported_operations=r_ops,
         commitments=[r_commit],
@@ -699,7 +872,7 @@ async def run_api(request: Any) -> Response:
         + json.dumps(payload),
     }
 
-    return JSONResponse(trace)
+    return _trace_json(trace)
 
 
 # ---------------------------------------------------------------------------
@@ -816,6 +989,8 @@ async def walkthrough_send_msg1_api(request: Any) -> Response:
                 w.internal_sid = None
                 w.intent_payload = None
                 w.msg1_outgoing = None
+                w.first_envelope = None
+                w.attacks = None
                 w.reply = None
                 w.trace_base = None
                 w.http_capture = []
@@ -932,13 +1107,15 @@ async def walkthrough_send_msg1_api(request: Any) -> Response:
             w.internal_sid = internal_sid
             w.intent_payload = intent_payload
             w.msg1_outgoing = outgoing
+            w.first_envelope = envelope
+            w.attacks = dict(attacks)
             w.trace_base = trace
 
         trace["directives"]["intent"] = intent_payload
         trace["directives"]["intent_canonical"] = _canonical_and_sig(intent_payload)
         if trace["result"].get("ok", True):
             trace["result"] = {"ok": True, "data": {"phase": "msg1_sent"}}
-        return JSONResponse(trace)
+        return _trace_json(trace)
     except Exception as e:
         tb = traceback.format_exc()
         return JSONResponse(
@@ -957,7 +1134,7 @@ async def walkthrough_receiver_checks_api(request: Any) -> Response:
         trace = w.trace_base
     if trace is None:
         return JSONResponse({"ok": False, "error": "walkthrough not started"}, status_code=400)
-    return JSONResponse(trace)
+    return _trace_json(trace)
 
 
 async def walkthrough_finalize_api(request: Any) -> Response:
@@ -971,30 +1148,79 @@ async def walkthrough_finalize_api(request: Any) -> Response:
         reply: Optional[ProtocolEnvelope] = w.reply
         wire_sid = w.wire_sid
         internal_sid = w.internal_sid
+        first_envelope = w.first_envelope
+        attacks = dict(w.attacks or {})
     if trace is None or reply is None or wire_sid is None or internal_sid is None:
         return JSONResponse({"ok": False, "error": "missing walkthrough state; run step 3 first"}, status_code=400)
 
-    # Append receiver->initiator envelope now.
-    trace["envelopes"].append({"dir": "receiver -> initiator", **_envelope_to_dict(reply), "privacy_intent": reply.privacy_intent})
-
     if reply.error is not None:
         trace["result"] = {"ok": False, "error": reply.error}
-        return JSONResponse(trace)
+        return _trace_json(trace)
 
     # Finalize on initiator (mirrors PrivacyAgent.run_intent post-reply path).
     initiator_agent = _HARNESS.initiator
     if initiator_agent is None:
         return JSONResponse({"ok": False, "error": "initiator not running"}, status_code=500)
+    receiver_url = "http://127.0.0.1:18083"
+    core = initiator_agent._core  # type: ignore[attr-defined]
 
-    processed = initiator_agent._core._operation.process(  # type: ignore[attr-defined]
+    # PSI is a 2-round protocol (init/msg0, msg1/msg2). After processing the
+    # first reply the initiator may still emit another outgoing message; drive
+    # the loop until the operation signals done, matching `run_intent`.
+    processed = core._operation.process(
         session_id=internal_sid,
         message={"phase": reply.phase, "message": reply.payload},
     )
-    if not processed.get("done"):
-        trace["result"] = {"ok": False, "error": "unexpected: protocol not done after msg2"}
-        return JSONResponse(trace)
+    token = _walk_id_ctx.set(w.walk_id)
+    try:
+        for _ in range(8):
+            if processed.get("done"):
+                break
+            outgoing = processed.get("outgoing")
+            if outgoing is None:
+                trace["result"] = {"ok": False, "error": "operation.process returned neither done nor outgoing"}
+                return _trace_json(trace)
+            intent = core._build_signed_intent(
+                session_id=wire_sid,
+                peer_url=receiver_url,
+                payload=outgoing["message"],
+                expiry_hours=DEFAULT_INTENT_EXPIRY_HOURS,
+            )
+            envelope = ProtocolEnvelope(
+                operation=core._operation.operation_id,
+                phase=outgoing.get("phase", "round"),
+                session_id=wire_sid,
+                payload=outgoing["message"],
+                privacy_intent=intent.model_dump(mode="json"),
+            )
+            trace["envelopes"].append(
+                {"dir": "initiator -> receiver", **_envelope_to_dict(envelope), "privacy_intent": envelope.privacy_intent}
+            )
+            next_reply = await core._peer_client.send_envelope(
+                peer_url=receiver_url,
+                envelope=envelope,
+                context_id=f"{core._operation.operation_id}_{wire_sid[:8]}",
+            )
+            if next_reply is None:
+                trace["result"] = {"ok": False, "error": "peer returned no reply"}
+                return _trace_json(trace)
+            trace["envelopes"].append(
+                {"dir": "receiver -> initiator", **_envelope_to_dict(next_reply), "privacy_intent": next_reply.privacy_intent}
+            )
+            if next_reply.error is not None:
+                trace["result"] = {"ok": False, "error": next_reply.error}
+                return _trace_json(trace)
+            processed = core._operation.process(
+                session_id=internal_sid,
+                message={"phase": next_reply.phase, "message": next_reply.payload},
+            )
+        else:
+            trace["result"] = {"ok": False, "error": "protocol exceeded round cap"}
+            return _trace_json(trace)
+    finally:
+        _walk_id_ctx.reset(token)
 
-    result_directive = initiator_agent._core.build_signed_result(  # type: ignore[attr-defined]
+    result_directive = core.build_signed_result(
         session_id=wire_sid,
         operation_result=processed.get("result") or {},
     )
@@ -1002,7 +1228,36 @@ async def walkthrough_finalize_api(request: Any) -> Response:
     trace["directives"]["result"] = result_payload
     trace["directives"]["result_canonical"] = _canonical_and_sig(result_payload)
     trace["result"] = {"ok": True, "data": result_payload.get("result_data", {})}
-    return JSONResponse(trace)
+
+    # Replay attack: re-send the captured first envelope after the protocol
+    # has completed normally. The receiver caches each round's reply for 30min
+    # (so a legitimate retry returns the same answer instead of re-running
+    # FFI), which short-circuits an exact-bytes replay before the intent
+    # replay check can fire. To demonstrate the intent-replay defense, clear
+    # the round-dedupe cache first — this simulates an attacker replaying
+    # *after* the retry window has expired, where the intent_replay_cache
+    # (24h, keyed on intent nonce + payload_hash) is the active defense.
+    if attacks.get("replay") and first_envelope is not None:
+        receiver_agent = _HARNESS.receiver
+        if receiver_agent is not None:
+            receiver_agent._core._round_dedupe_cache.clear()  # type: ignore[attr-defined]
+        trace["audit"].append({"ts_ms": 0, "name": "replay.second_send", "ok": True, "details": {"note": "resending the same intent+envelope (round-dedupe cache cleared to simulate post-retry-window replay)"}})
+        replay_reply = await core._peer_client.send_envelope(
+            peer_url=receiver_url,
+            envelope=first_envelope,
+            context_id=f"{core._operation.operation_id}_{wire_sid[:8]}_replay",
+        )
+        if replay_reply is not None:
+            trace["envelopes"].append(
+                {"dir": "initiator (replay) -> receiver", **_envelope_to_dict(first_envelope), "privacy_intent": first_envelope.privacy_intent}
+            )
+            trace["envelopes"].append(
+                {"dir": "receiver -> initiator (replay reply)", **_envelope_to_dict(replay_reply), "privacy_intent": replay_reply.privacy_intent}
+            )
+            if replay_reply.error is not None:
+                trace["result"] = {"ok": False, "error": replay_reply.error}
+
+    return _trace_json(trace)
 
 
 async def _ensure_agents(lab: dict[str, Any]) -> tuple[PrivacyAgent, PrivacyAgent, list[dict[str, Any]]]:
@@ -1199,6 +1454,8 @@ routes = [
     Route("/api/walkthrough/finalize", walkthrough_finalize_api, methods=["POST"]),
     Route("/api/compat", compat_api, methods=["POST"]),
     Route("/api/agentcards", agentcards_api, methods=["POST"]),
+    Route("/api/runs", save_run_api, methods=["POST"]),
+    Route("/api/runs/{run_id}", load_run_api, methods=["GET"]),
 ]
 
 app = Starlette(routes=routes)

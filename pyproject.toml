@@ -1,6 +1,6 @@
 [project]
 name = "ap3"
-version = "1.2.1"
+version = "1.2.2"
 description = "Agent Privacy-Preserving Protocol - AP3"
 readme = "README.md"
 license = { text = "Apache-2.0" }
@@ -21,7 +21,7 @@ Issues        = "https://github.com/lfdt-ap3/ap3/issues"
 
 [project.optional-dependencies]
 a2a = [
-    "a2a-sdk[http-server]>=1.0.2",
+    "a2a-sdk[http-server]>=1.0.3",
     "grpcio>=1.60.0",
     "uvicorn>=0.30.0",
     "starlette>=0.37.0",

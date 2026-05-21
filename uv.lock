@@ -203,7 +203,7 @@ wheels = [
 
 [[package]]
 name = "ap3"
-version = "1.2.1"
+version = "1.2.2"
 source = { editable = "." }
 dependencies = [
     { name = "cryptography" },
@@ -248,7 +248,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "a2a-sdk", extras = ["http-server"], marker = "extra == 'a2a'", specifier = ">=1.0.2" },
+    { name = "a2a-sdk", extras = ["http-server"], marker = "extra == 'a2a'", specifier = ">=1.0.3" },
     { name = "cryptography", specifier = ">=42.0.0" },
     { name = "grpcio", marker = "extra == 'a2a'", specifier = ">=1.60.0" },
     { name = "httpx", specifier = ">=0.27.0" },
@@ -283,7 +283,7 @@ dev = [
 
 [[package]]
 name = "ap3-functions"
-version = "1.2.1"
+version = "1.2.2"
 source = { editable = "packages/ap3-functions" }
 dependencies = [
     { name = "ap3" },
@@ -2266,7 +2266,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "a2a-sdk", extras = ["http-server"], specifier = ">=1.0.2" },
+    { name = "a2a-sdk", extras = ["http-server"], specifier = ">=1.0.3" },
     { name = "ap3", extras = ["a2a"], editable = "." },
     { name = "ap3-functions", editable = "packages/ap3-functions" },
     { name = "httpx", specifier = ">=0.28.1" },

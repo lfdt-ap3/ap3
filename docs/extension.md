@@ -167,16 +167,37 @@ The `params` object MUST adhere to the following JSON schema:
     }
     ```
 
+### A2A protocol version
+
+AP3 tracks A2A's stable line. The current release targets **A2A v1.0** and the AP3 SDK pins `a2a-sdk>=1.0.3`
+
 ### Example AgentCard with AP3 extension
 
 ```json
 {
     "name": "XYZ Agent",
-    "url": "http://localhost:10001/",
     "version": "1.0.0",
     "description": "Perform secure operations",
-    "preferredTransport": "JSONRPC",
+    "default_input_modes": ["text"],
+    "default_output_modes": ["text"],
+    "supported_interfaces": [
+        {
+            "url": "http://localhost:10001/",
+            "protocol_binding": "JSONRPC",
+            "protocol_version": "1.0"
+        }
+    ],
+    "skills": [
+        {
+            "id": "protocol.psi.sanction.v1",
+            "name": "PSI",
+            "description": "Private Set Intersection over AP3",
+            "tags": ["ap3", "psi"],
+            "examples": []
+        }
+    ],
     "capabilities": {
+        "streaming": true,
         "extensions": [
             {
                 "uri": "https://github.com/lfdt-ap3/ap3",
@@ -206,8 +227,7 @@ The `params` object MUST adhere to the following JSON schema:
                 },
                 "required": true
             }
-        ],
-        "streaming": true
+        ]
     }
 }
 ```

@@ -36,8 +36,8 @@ nav:
   - Roadmap : roadmap.md
 theme:
   name: material
-  logo: assets/logo.svg
-  favicon: assets/favicon.svg
+  logo: assets/AP3_Full_Logo_White.svg
+  favicon: assets/AP3_Wordmark.svg
   features:
     - navigation.footer
     - navigation.expand

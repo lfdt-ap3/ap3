@@ -9,7 +9,7 @@ from ap3.types import PrivacyIntentDirective, PrivacyResultDirective, PrivacyErr
 from ap3.services import CommitmentMetadataSystem, CommitmentCompatibilityChecker, RemoteAgentDiscoveryService
 from ap3 import signing
 
-__version__ = "1.2.1"
+__version__ = "1.2.2"
 __all__ = [
     "Operation",
     "OperationResult",

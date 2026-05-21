@@ -34,6 +34,11 @@ _PARAM_PUBLIC_KEY = "public_key_hex"
 # Ed25519 public key: 32 bytes = 64 hex chars.
 _ED25519_PUBKEY_HEX_LEN = 64
 
+# A2A protocol version advertised on AgentInterface entries. REQUIRED by A2A
+# v1.0 (`google.api.field_behavior = REQUIRED` in a2a.proto). Bump in lockstep
+# with the pinned `a2a-sdk` major in pyproject.toml.
+A2A_PROTOCOL_VERSION = "1.0"
+
 
 def normalize_url(url: str) -> str:
     """Canonicalize an agent URL so equal endpoints compare equal.
@@ -85,17 +90,25 @@ def build_privacy_agent_card(
     skill_name: str,
     skill_description: str,
     skill_examples: Iterable[str],
+    skill_tags: Iterable[str],
     roles: list[str],
     supported_operations: list[str],
     commitments: list[CommitmentMetadata],
     public_key: bytes,
     ap3_sdk_version: str,
+    a2a_protocol_version: str = A2A_PROTOCOL_VERSION,
 ) -> AgentCard:
     """Build an AgentCard with an AP3 extension block.
 
     The extension params include `public_key_hex` — every peer will verify
     directives signed by this agent against this exact key. Rotating the
     key means republishing the card.
+
+    `skill_tags` and `a2a_protocol_version` are REQUIRED by A2A v1.0 (per the
+    `google.api.field_behavior = REQUIRED` annotations on `AgentSkill.tags`
+    and `AgentInterface.protocol_version` in `a2a.proto`). Strict v1.0
+    consumers (`A2ACardResolver` with schema validation, JSON-Schema
+    validators) will reject cards missing them.
     """
     if len(public_key) != 32:
         raise ValueError(
@@ -103,6 +116,7 @@ def build_privacy_agent_card(
         )
 
     skill = AgentSkill(id=skill_id, name=skill_name, description=skill_description)
+    skill.tags.extend(list(skill_tags))
     skill.examples.extend(list(skill_examples))
 
     card = AgentCard(
@@ -112,7 +126,11 @@ def build_privacy_agent_card(
         capabilities=AgentCapabilities(streaming=True),
     )
     card.supported_interfaces.append(
-        AgentInterface(url=f"{card_url}/", protocol_binding="JSONRPC")
+        AgentInterface(
+            url=f"{card_url}/",
+            protocol_binding="JSONRPC",
+            protocol_version=a2a_protocol_version,
+        )
     )
     card.default_input_modes.append("text")
     card.default_output_modes.append("text")

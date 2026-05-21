@@ -93,6 +93,7 @@ class PrivacyAgent(ProtocolHandler):
         skill_name: Optional[str] = None,
         skill_description: Optional[str] = None,
         skill_examples: Optional[list[str]] = None,
+        skill_tags: Optional[list[str]] = None,
         receiver_config_provider: Optional[Callable[[], dict]] = None,
         llm_executor: Optional[Any] = None,
         compatibility_scorer: Optional[
@@ -139,6 +140,7 @@ class PrivacyAgent(ProtocolHandler):
             skill_name=skill_name or operation_type,
             skill_description=skill_description or f"{operation_type} over AP3",
             skill_examples=skill_examples or [],
+            skill_tags=skill_tags or ["ap3", operation_type.lower()],
             roles=[role],
             supported_operations=[operation_type],
             commitments=[commitment_obj],

@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Minimal AP3 PSI (Private Set Intersection) over A2A"
 requires-python = ">=3.11,<3.14"
 dependencies = [
-    "a2a-sdk[http-server]>=1.0.2",
+    "a2a-sdk[http-server]>=1.0.3",
     "ap3[a2a]",
     "ap3-functions",
     "httpx>=0.28.1",

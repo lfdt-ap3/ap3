@@ -25,7 +25,9 @@ def _card(url: str) -> AgentCard:
         version="1.0.0",
         capabilities=AgentCapabilities(streaming=True),
     )
-    c.supported_interfaces.append(AgentInterface(url=url, protocol_binding="JSONRPC"))
+    c.supported_interfaces.append(
+        AgentInterface(url=url, protocol_binding="JSONRPC", protocol_version="1.0")
+    )
     return c
 
 

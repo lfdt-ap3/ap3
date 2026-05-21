@@ -429,7 +429,7 @@ def test_extract_peer_info_rejects_short_hex():
         capabilities=AgentCapabilities(streaming=True),
     )
     card.supported_interfaces.append(
-        AgentInterface(url="http://x", protocol_binding="JSONRPC")
+        AgentInterface(url="http://x", protocol_binding="JSONRPC", protocol_version="1.0")
     )
     params = Struct()
     params.update(
@@ -470,7 +470,7 @@ def test_extract_peer_info_rejects_non_hex_chars():
         capabilities=AgentCapabilities(streaming=True),
     )
     card.supported_interfaces.append(
-        AgentInterface(url="http://x", protocol_binding="JSONRPC")
+        AgentInterface(url="http://x", protocol_binding="JSONRPC", protocol_version="1.0")
     )
     params = Struct()
     params.update(

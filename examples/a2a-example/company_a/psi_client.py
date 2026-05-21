@@ -44,7 +44,7 @@ async def main() -> None:
     )
     _card_url = os.getenv("CARD_URL", "http://localhost:10002")
     card.supported_interfaces.append(
-        AgentInterface(protocol_binding="JSONRPC", url=_card_url)
+        AgentInterface(protocol_binding="JSONRPC", url=_card_url, protocol_version="1.0")
     )
 
     commitment = CommitmentMetadata(

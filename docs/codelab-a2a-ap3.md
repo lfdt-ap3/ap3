@@ -96,7 +96,7 @@ version = "0.1.0"
 description = "Consumer A2A agent (Hello World + AP3 initiator)"
 requires-python = ">=3.11,<3.14"
 dependencies = [
-  "a2a-sdk[http-server]>=1.0.2",
+  "a2a-sdk[http-server]>=1.0.3",
   "httpx>=0.28.1",
   "pydantic>=2.11.4",
   "starlette>=0.46.2",
@@ -226,7 +226,7 @@ def main() -> None:
         default_output_modes=["text"],
         capabilities=AgentCapabilities(streaming=True, extended_agent_card=True),
         supported_interfaces=[
-            AgentInterface(protocol_binding="JSONRPC", url=self_url),
+            AgentInterface(protocol_binding="JSONRPC", url=self_url, protocol_version="1.0"),
         ],
         skills=[skill],
     )
@@ -547,7 +547,7 @@ def main() -> None:
         default_input_modes=["text"],
         default_output_modes=["text"],
         capabilities=AgentCapabilities(streaming=True, extended_agent_card=True),
-        supported_interfaces=[AgentInterface(protocol_binding="JSONRPC", url=self_url)],
+        supported_interfaces=[AgentInterface(protocol_binding="JSONRPC", url=self_url, protocol_version="1.0")],
         skills=[skill],
     )
 
@@ -639,7 +639,7 @@ version = "0.1.0"
 description = "Provider A2A agent (Hello World + AP3 receiver)"
 requires-python = ">=3.11,<3.14"
 dependencies = [
-  "a2a-sdk[http-server]>=1.0.2",
+  "a2a-sdk[http-server]>=1.0.3",
   "httpx>=0.28.1",
   "pydantic>=2.11.4",
   "starlette>=0.46.2",
@@ -701,7 +701,7 @@ def main() -> None:
         default_output_modes=["text"],
         capabilities=AgentCapabilities(streaming=True, extended_agent_card=True),
         supported_interfaces=[
-            AgentInterface(protocol_binding="JSONRPC", url=self_url),
+            AgentInterface(protocol_binding="JSONRPC", url=self_url, protocol_version="1.0"),
         ],
         skills=[skill],
     )
@@ -1014,7 +1014,7 @@ def main() -> None:
         default_input_modes=["text"],
         default_output_modes=["text"],
         capabilities=AgentCapabilities(streaming=True, extended_agent_card=True),
-        supported_interfaces=[AgentInterface(protocol_binding="JSONRPC", url=self_url)],
+        supported_interfaces=[AgentInterface(protocol_binding="JSONRPC", url=self_url, protocol_version="1.0")],
         skills=[skill],
     )
 
@@ -1138,7 +1138,9 @@ async def main() -> None:
         version="1.0.0",
         capabilities=AgentCapabilities(streaming=True, extended_agent_card=None),
     )
-    card.supported_interfaces.append(AgentInterface(protocol_binding="JSONRPC", url=card_url))
+    card.supported_interfaces.append(
+        AgentInterface(protocol_binding="JSONRPC", url=card_url, protocol_version="1.0")
+    )
 
     commitment = CommitmentMetadata(
         agent_id="consumer_customers",

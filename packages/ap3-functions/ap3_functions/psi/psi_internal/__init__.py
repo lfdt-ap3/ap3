@@ -20,7 +20,7 @@ from .utils import (
     verify_commitment,
 )
 
-__version__ = "1.2.1"
+__version__ = "1.2.2"
 
 __all__ = [
     "psc_create_msg1", "psc_process_msg1", "psc_process_msg2",

@@ -2,7 +2,53 @@ const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 
 function escapeHtml(s){return String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');}
+function escapeAttr(s){return String(s).replaceAll('&','&amp;').replaceAll('"','&quot;').replaceAll("'", '&#39;').replaceAll('<','&lt;').replaceAll('>','&gt;');}
 function pretty(obj){return JSON.stringify(obj, null, 2);}
+
+// Collapsible JSON tree. Returns an HTML string.
+// `depth` controls auto-collapse: nested objects beyond depth 1 start closed.
+function jsonTree(value, depth = 0){
+  const t = typeof value;
+  if (value === null) return `<span class="j-null">null</span>`;
+  if (t === 'boolean') return `<span class="j-bool">${value}</span>`;
+  if (t === 'number') return `<span class="j-num">${value}</span>`;
+  if (t === 'string'){
+    // Long base64-ish strings get truncated with a click-to-expand.
+    if (value.length > 200){
+      const head = value.slice(0, 80);
+      return `<span class="j-str" title="${escapeAttr(value)}">"${escapeHtml(head)}<span class="j-ellipsis">…(${value.length - head.length} more chars)</span>"</span>`;
+    }
+    return `<span class="j-str">"${escapeHtml(value)}"</span>`;
+  }
+  if (Array.isArray(value)){
+    if (value.length === 0) return `<span class="j-bracket">[]</span>`;
+    const open = depth < 1;
+    const inner = value.map((v, i) => `<div class="j-row"><span class="j-idx">${i}:</span> ${jsonTree(v, depth + 1)}</div>`).join('');
+    return `<details class="j-block" ${open ? 'open' : ''}><summary><span class="j-bracket">[</span><span class="j-meta">${value.length} item${value.length === 1 ? '' : 's'}</span><span class="j-bracket">]</span></summary><div class="j-children">${inner}</div></details>`;
+  }
+  if (t === 'object'){
+    const keys = Object.keys(value);
+    if (keys.length === 0) return `<span class="j-bracket">{}</span>`;
+    const open = depth < 1;
+    const inner = keys.map(k => `<div class="j-row"><span class="j-key">${escapeHtml(k)}</span><span class="j-colon">:</span> ${jsonTree(value[k], depth + 1)}</div>`).join('');
+    return `<details class="j-block" ${open ? 'open' : ''}><summary><span class="j-bracket">{</span><span class="j-meta">${keys.length} key${keys.length === 1 ? '' : 's'}</span><span class="j-bracket">}</span></summary><div class="j-children">${inner}</div></details>`;
+  }
+  return `<span class="j-str">${escapeHtml(String(value))}</span>`;
+}
+
+// Produces a button that copies arbitrary text via a delegated listener
+// (see bottom of file). Using a data-attribute avoids the HTML-attribute
+// quote-escaping landmine that inline onclick="..." has with JSON strings.
+function copyButton(text, label = 'Copy', className = 'ghost'){
+  return `<button type="button" class="${className}" data-copy-payload="${escapeAttr(String(text ?? ''))}">${escapeHtml(label)}</button>`;
+}
+
+// Wraps a jsonTree with a copy button.
+function jsonTreeBlock(value, opts = {}){
+  const raw = pretty(value);
+  const copyHtml = opts.copy !== false ? copyButton(raw, 'Copy JSON', 'ghost j-copy') : '';
+  return `<div class="j-wrap">${copyHtml}<div class="json-tree">${jsonTree(value)}</div></div>`;
+}
 
 async function copyText(text){
   try{
@@ -72,6 +118,17 @@ function setChat(msg){
   $('#chat-log').prepend(el);
 }
 
+const REFUSAL_HINTS = {
+  "MISSING_INTENT":           { hint: "Receiver expected `privacy_intent` on the first envelope.",                                 audit: "rx.check.missing_intent" },
+  "INTENT_SESSION_MISMATCH":  { hint: "Receiver binds session_id: `intent.ap3_session_id` must equal `envelope.session_id`.",      audit: "rx.check.session_binding" },
+  "WRONG_RECEIVER":           { hint: "Receiver URL must appear in intent participants.",                                          audit: "rx.check.participants" },
+  "BAD_SIGNATURE":            { hint: "Receiver verified the intent signature with initiator public key.",                         audit: "rx.check.signature" },
+  "INTENT_REJECTED":          { hint: "Intent directive failed validation (expiry/fields).",                                       audit: "rx.check.directive_validate" },
+  "INTENT_PAYLOAD_MISMATCH":  { hint: "Receiver recomputed sha256(envelope.payload) and compared to intent.payload_hash.",         audit: "rx.check.payload_hash" },
+  "REPLAY":                   { hint: "Receiver detected a replayed intent using its replay cache.",                               audit: "rx.check.replay_key" },
+  "INCOMPATIBLE_PEER":        { hint: "Receiver rejected based on compatibility policy.",                                          audit: "rx.check.compatibility" },
+};
+
 function _refusalFromTrace(trace){
   const envs = trace?.envelopes || [];
   for (const e of envs){
@@ -97,17 +154,7 @@ function renderOutcomeCard(trace){
     return;
   }
   if (refusal){
-    const hints = {
-      "MISSING_INTENT": "Receiver expected `privacy_intent` on the first envelope.",
-      "INTENT_SESSION_MISMATCH": "Receiver binds session_id: `intent.ap3_session_id` must equal `envelope.session_id`.",
-      "WRONG_RECEIVER": "Receiver URL must appear in intent participants.",
-      "BAD_SIGNATURE": "Receiver verified the intent signature with initiator public key.",
-      "INTENT_REJECTED": "Intent directive failed validation (expiry/fields).",
-      "INTENT_PAYLOAD_MISMATCH": "Receiver recomputed sha256(msg1_payload) and compared to intent.msg1_hash.",
-      "REPLAY": "Receiver detected a replayed intent/msg1 using its replay cache.",
-      "INCOMPATIBLE_PEER": "Receiver rejected based on compatibility policy.",
-    };
-    const hint = hints[refusal.error_code] || "";
+    const hint = REFUSAL_HINTS[refusal.error_code]?.hint || "";
     el.innerHTML = `<div class="bubble bad">
       <div><b>Receiver refused</b> <span style="opacity:.75">error_code=${escapeHtml(refusal.error_code || '')}</span></div>
       <div style="height:8px"></div>
@@ -118,6 +165,7 @@ function renderOutcomeCard(trace){
         <button class="ghost" onclick="setActiveTab('envelope')">Open Envelope</button>
         <button class="ghost" onclick="setActiveTab('directives')">Open Directives</button>
         <button class="ghost" onclick="setActiveTab('audit')">Open Audit</button>
+        <button class="ghost" onclick="setActiveTab('refusals')">All refusal codes</button>
       </div>
     </div>`;
     return;
@@ -177,7 +225,7 @@ function renderFlow(trace){
     ],
     3: [
       "`PrivacyAgent.handle_envelope()` → `_handle_as_receiver()`",
-      "Key checks (receiver): session binding, participants, signature verify, directive validate, msg1_hash bind, replay, compatibility",
+      "Key checks (receiver): session binding, participants, signature verify, directive validate, payload_hash bind, replay, compatibility",
       "`AP3Middleware._handle_as_receiver()` (middleware embedding path)",
     ],
     4: [
@@ -192,45 +240,25 @@ function renderFlow(trace){
   const map = {
     0: { what: 'We fetch each agent’s AgentCard from its URL and decode the AP3 extension (roles, supported operations, commitments, public key).', go:'agentcard', label:'Open AgentCards' },
     1: { what: 'We run the compatibility scorer over both agents’ advertised AP3 parameters and explain why the pair is (in)compatible.', go:'audit', label:'Open Compatibility' },
-    2: { what: 'Initiator signs a PrivacyIntentDirective (binding session_id + msg1 hash) and sends msg1 as a ProtocolEnvelope over A2A JSON-RPC. You can check the Envelope and Directives tabs to see the signed intent and envelope.', go:'a2ahttp', label:'Open A2A HTTP' },
-    3: { what: 'Receiver validates session binding, signature, directive validity, msg1 hash, replay protection and sends back msg2 as a ProtocolEnvelope over A2A JSON-RPC. You can check the Envelope also to see the signed envelope.', go:'audit', label:'Open Receiver checks' },
+    2: { what: 'Initiator signs a PrivacyIntentDirective (binding session_id + payload hash) and sends the first envelope as a ProtocolEnvelope over A2A JSON-RPC. You can check the Envelope and Directives tabs to see the signed intent and envelope.', go:'a2ahttp', label:'Open A2A HTTP' },
+    3: { what: 'Receiver validates session binding, signature, directive validity, payload hash, replay protection and sends back its reply as a ProtocolEnvelope over A2A JSON-RPC. You can check the Envelope also to see the signed envelope.', go:'audit', label:'Open Receiver checks' },
     4: { what: 'Initiator processes the receiver reply and produces a signed PrivacyResultDirective (result + proofs).', go:'directives', label:'Open Directives' },
     null: { what: 'Use the walkthrough to run AP3 step-by-step. The inspector tabs show raw HTTP, envelopes, directives, audit checks, and logs.', go:'', label:'' },
   };
   const info = map[step] || map[null];
   const pointers = (code[step] || code[null] || []).map(x => `<li>${escapeHtml(x)}</li>`).join('');
 
-  const errorToAudit = {
-    "MISSING_INTENT": "rx.check.missing_intent",
-    "INTENT_SESSION_MISMATCH": "rx.check.session_binding",
-    "WRONG_RECEIVER": "rx.check.participants",
-    "BAD_SIGNATURE": "rx.check.signature",
-    "INTENT_REJECTED": "rx.check.directive_validate",
-    "INTENT_PAYLOAD_MISMATCH": "rx.check.msg1_hash",
-    "REPLAY": "rx.check.replay_key",
-    "INCOMPATIBLE_PEER": "rx.check.compatibility",
-  };
-  const failingAuditName = refusal?.error_code ? (errorToAudit[refusal.error_code] || null) : null;
+  const failingAuditName = refusal?.error_code ? (REFUSAL_HINTS[refusal.error_code]?.audit || null) : null;
   const auditEvent = failingAuditName ? (trace?.audit || []).find(e => e?.name === failingAuditName) : null;
 
   if (refusal){
-    const hints = {
-      "MISSING_INTENT": "Receiver expected `privacy_intent` on the first envelope.",
-      "INTENT_SESSION_MISMATCH": "Receiver binds session_id: `intent.ap3_session_id` must equal `envelope.session_id`.",
-      "WRONG_RECEIVER": "Receiver URL must appear in intent participants.",
-      "BAD_SIGNATURE": "Receiver verified the intent signature with initiator public key.",
-      "INTENT_REJECTED": "Intent directive failed validation (expiry/fields).",
-      "INTENT_PAYLOAD_MISMATCH": "Receiver recomputed sha256(msg1_payload) and compared to intent.msg1_hash.",
-      "REPLAY": "Receiver detected a replayed intent/msg1 using its replay cache.",
-      "INCOMPATIBLE_PEER": "Receiver rejected based on compatibility policy.",
-    };
-    const hint = hints[refusal.error_code] || "";
+    const hint = REFUSAL_HINTS[refusal.error_code]?.hint || "";
     const auditHtml = auditEvent
       ? `<div style="height:10px"></div>
          <div style="opacity:.85;font-size:12px;font-weight:700">Relevant receiver check</div>
          <div class="bubble" style="margin-top:8px">
            <div><span class="bad">FAIL</span> <b>${escapeHtml(auditEvent.name || '')}</b></div>
-           <pre style="margin-top:8px">${escapeHtml(pretty(auditEvent.details || {}))}</pre>
+           <div style="height:8px"></div>${jsonTreeBlock(auditEvent.details || {}, {copy: false})}
          </div>`
       : '';
     setPanel('#panel-flow', `
@@ -255,19 +283,18 @@ function renderFlow(trace){
 
   setPanel('#panel-flow', `
     <div class="bubble">
+      <div style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;opacity:.7;margin-bottom:4px">Concept</div>
       <div style="font-weight:800;margin-bottom:6px">Flow — ${escapeHtml(stepTitle || 'Overview')}</div>
-      <div style="opacity:.9">${escapeHtml(info.what)}</div>
+      <div style="opacity:.92;line-height:1.55">${escapeHtml(info.what)}</div>
       <div style="height:10px"></div>
       ${info.go ? `<button onclick="setActiveTab('${info.go}')">${escapeHtml(info.label)}</button>` : ''}
     </div>
-    ${info.go ? `
-    <details class="bubble" open>
-      <summary style="cursor:pointer;font-weight:700">Code pointers (what runs)</summary>
-      <div style="height:10px"></div>
-      <div style="opacity:.85;font-size:12px;line-height:1.5">
-        This is a “map” of the main functions involved. It’s meant to help you jump into the SDK quickly,
-        but it can be noisy if you’re just trying to learn the concepts.
-      </div>
+    ${pointers ? `
+    <details class="bubble">
+      <summary style="cursor:pointer;font-weight:700">
+        <span style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;opacity:.7;font-weight:600">For engineers</span>
+        &nbsp;&middot;&nbsp; Show me the code (SDK pointers)
+      </summary>
       <div style="height:10px"></div>
       <ul style="margin:0;padding-left:18px;opacity:.95;line-height:1.6">${pointers}</ul>
     </details>` : ''}
@@ -296,7 +323,7 @@ function renderRequest(trace){
     <div style="opacity:.8;margin:0 0 6px 2px;font-size:12px">copy-as-curl</div>
     <div class="row" style="align-items:center">
       <div style="opacity:.8;margin:0 0 6px 2px;font-size:12px;flex:1">copy-as-curl</div>
-      <button class="ghost" onclick="copyText(${JSON.stringify(r.curl || '')})">Copy</button>
+      ${copyButton(r.curl || '', 'Copy')}
     </div>
     <pre>${escapeHtml(r.curl || '')}</pre>
   `);
@@ -317,14 +344,25 @@ function renderA2AHttp(trace){
     const h = e.headers || {};
     const body = e.body || '';
     const dirBadge = dir ? `<span style="opacity:.75;margin-left:8px">${escapeHtml(dir)}</span>` : '';
+    // body may be a JSON string we can pretty-tree, or plain text.
+    let bodyHtml;
+    try {
+      const parsed = (typeof body === 'string' && body.trim().startsWith('{')) ? JSON.parse(body) : null;
+      bodyHtml = parsed !== null ? jsonTreeBlock(parsed, {copy: false}) : `<pre>${escapeHtml(body)}</pre>`;
+    } catch(_e) {
+      bodyHtml = `<pre>${escapeHtml(body)}</pre>`;
+    }
     return `<div class="bubble ${cls}">
       <div>${badge} <b>${escapeHtml(line)}</b>${dirBadge} <span style="opacity:.6">${escapeHtml(e.ts || '')}</span></div>
       <div style="height:8px"></div>
-      <div style="opacity:.8;margin:0 0 6px 2px;font-size:12px">headers</div>
-      <pre>${escapeHtml(pretty(h))}</pre>
+      <details>
+        <summary style="cursor:pointer;opacity:.8;font-size:12px">headers</summary>
+        <div style="height:6px"></div>
+        ${jsonTreeBlock(h, {copy: false})}
+      </details>
       <div style="height:8px"></div>
       <div style="opacity:.8;margin:0 0 6px 2px;font-size:12px">body</div>
-      <pre>${escapeHtml(body)}</pre>
+      ${bodyHtml}
     </div>`;
   }).join('');
   setPanel('#panel-a2ahttp', html);
@@ -336,18 +374,12 @@ function renderAgentCard(trace){
   setPanel('#panel-agentcard', `
     <div class="row">
       <div class="card">
-        <details open>
-          <summary style="cursor:pointer;font-weight:700">Initiator — AP3 extension</summary>
-          <div style="height:10px"></div>
-          <pre>${escapeHtml(pretty(i.ap3_extension || {}))}</pre>
-        </details>
+        <div style="font-weight:700;margin-bottom:6px">Initiator — AP3 extension</div>
+        ${jsonTreeBlock(i.ap3_extension || {})}
       </div>
       <div class="card">
-        <details open>
-          <summary style="cursor:pointer;font-weight:700">Receiver — AP3 extension</summary>
-          <div style="height:10px"></div>
-          <pre>${escapeHtml(pretty(r.ap3_extension || {}))}</pre>
-        </details>
+        <div style="font-weight:700;margin-bottom:6px">Receiver — AP3 extension</div>
+        ${jsonTreeBlock(r.ap3_extension || {})}
       </div>
     </div>
   `);
@@ -392,7 +424,7 @@ async function walkthroughPrefetchCompat(){
     return;
   }
   const cls = out.compatible ? 'ok' : 'bad';
-  setPanel('#panel-audit', `<div class="bubble"><div><span class="${cls}">${out.compatible ? 'COMPATIBLE' : 'INCOMPATIBLE'}</span> <b>compatibility preflight</b></div><pre style="margin-top:8px">${escapeHtml(pretty(out))}</pre></div>`);
+  setPanel('#panel-audit', `<div class="bubble"><div><span class="${cls}">${out.compatible ? 'COMPATIBLE' : 'INCOMPATIBLE'}</span> <b>compatibility preflight</b></div><div style="height:8px"></div>${jsonTreeBlock(out, {copy: false})}</div>`);
 }
 
 function renderEnvelopes(trace){
@@ -405,12 +437,12 @@ function renderEnvelopes(trace){
     <div class="row">
       <div class="card">
         <div style="font-weight:700;margin-bottom:6px">Initiator → Receiver</div>
-        <pre>${escapeHtml(pretty(inc))}</pre>
+        ${jsonTreeBlock(inc)}
       </div>
       ${
         hideRxToIx
           ? `<div class="card"><div style="font-weight:700;margin-bottom:6px">Receiver → Initiator</div><div class="bubble">Not available yet (finish receiver checks to produce a reply).</div></div>`
-          : `<div class="card"><div style="font-weight:700;margin-bottom:6px">Receiver → Initiator</div><pre>${escapeHtml(pretty(out))}</pre></div>`
+          : `<div class="card"><div style="font-weight:700;margin-bottom:6px">Receiver → Initiator</div>${jsonTreeBlock(out)}</div>`
       }
     </div>
   `);
@@ -423,24 +455,20 @@ function renderDirectives(trace){
     <div class="row">
       <div class="card">
         <div style="font-weight:700;margin-bottom:6px">Intent directive</div>
-        <button class="ghost" style="margin:-4px 0 8px" onclick="copyText(${JSON.stringify(pretty(d.intent || {}))})">Copy JSON</button>
-        <pre>${escapeHtml(pretty(d.intent || {}))}</pre>
+        ${jsonTreeBlock(d.intent || {})}
         <div style="height:10px"></div>
         <div style="opacity:.8;margin:0 0 6px 2px;font-size:12px">canonical + signature</div>
-        <button class="ghost" style="margin:-4px 0 8px" onclick="copyText(${JSON.stringify(pretty(d.intent_canonical || {}))})">Copy canonical</button>
-        <pre>${escapeHtml(pretty(d.intent_canonical || {}))}</pre>
+        ${jsonTreeBlock(d.intent_canonical || {})}
       </div>
       ${
         hideResult
           ? `<div class="card"><div style="font-weight:700;margin-bottom:6px">Result directive</div><div class="bubble">Not available yet (result is produced after receiver processing completes).</div></div>`
           : `<div class="card">
               <div style="font-weight:700;margin-bottom:6px">Result directive</div>
-              <button class="ghost" style="margin:-4px 0 8px" onclick="copyText(${JSON.stringify(pretty(d.result || {}))})">Copy JSON</button>
-              <pre>${escapeHtml(pretty(d.result || {}))}</pre>
+              ${jsonTreeBlock(d.result || {})}
               <div style="height:10px"></div>
               <div style="opacity:.8;margin:0 0 6px 2px;font-size:12px">canonical + signature</div>
-              <button class="ghost" style="margin:-4px 0 8px" onclick="copyText(${JSON.stringify(pretty(d.result_canonical || {}))})">Copy canonical</button>
-              <pre>${escapeHtml(pretty(d.result_canonical || {}))}</pre>
+              ${jsonTreeBlock(d.result_canonical || {})}
             </div>`
       }
     </div>
@@ -451,13 +479,96 @@ function renderAudit(trace){
   const a = trace.audit || [];
   const rows = a.map(e => {
     const cls = e.ok ? 'ok' : 'bad';
-    return `<div class="bubble"><div><span class="${cls}">${e.ok ? 'OK' : 'FAIL'}</span> <b>${escapeHtml(e.name)}</b> <span style="opacity:.6">+${e.ts_ms}ms</span></div><pre style="margin-top:8px">${escapeHtml(pretty(e.details || {}))}</pre></div>`;
+    return `<div class="bubble"><div><span class="${cls}">${e.ok ? 'OK' : 'FAIL'}</span> <b>${escapeHtml(e.name)}</b> <span style="opacity:.6">+${e.ts_ms}ms</span></div><div style="height:8px"></div>${jsonTreeBlock(e.details || {}, {copy: false})}</div>`;
   }).join('');
   setPanel('#panel-audit', rows || `<div class="bubble">No audit events.</div>`);
 }
 
 function renderLogs(trace){
-  setPanel('#panel-logs', `<pre>${escapeHtml(pretty(trace.logs || []))}</pre>`);
+  setPanel('#panel-logs', jsonTreeBlock(trace.logs || []));
+}
+
+function renderPsi(trace){
+  const pi = trace?.psi_internals || null;
+  if (!pi || !pi.rounds || !pi.rounds.length){
+    setPanel('#panel-psi', `<div class="bubble">No PSI internals yet &mdash; run the walkthrough to produce protocol rounds.</div>`);
+    return;
+  }
+  const intro = `
+    <div class="bubble">
+      <div style="font-weight:700;margin-bottom:6px">PSI wire-level decode</div>
+      <div style="opacity:.92;line-height:1.55">
+        Each PSI round carries a base64-encoded payload. Below is the structural breakdown of
+        what the bytes actually contain. <b>The customer record never appears here</b> &mdash; it's
+        hashed and blinded into the Ristretto255 group elements inside <code>psc_msg1</code>.
+      </div>
+      <div style="height:8px"></div>
+      <div style="opacity:.75;font-size:12px">${escapeHtml(pi.note || '')}</div>
+    </div>
+  `;
+  const rounds = pi.rounds.map(r => {
+    const segs = (r.segments || []).map(s => {
+      const detail = s.hex
+        ? `<div class="bubble" style="margin-top:6px;font-family:ui-monospace,Menlo,monospace;font-size:11px;word-break:break-all"><span style="opacity:.7">hex:</span> ${escapeHtml(s.hex)}</div>`
+        : (s.sha256
+            ? `<div class="bubble" style="margin-top:6px;font-family:ui-monospace,Menlo,monospace;font-size:11px;word-break:break-all"><span style="opacity:.7">sha256:</span> ${escapeHtml(s.sha256)}</div>`
+            : '');
+      return `<div style="padding:8px 10px;border-top:1px solid rgba(255,255,255,.06)">
+        <div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap">
+          <b style="font-family:ui-monospace,Menlo,monospace;color:#9ec5ff">${escapeHtml(s.name)}</b>
+          <span style="opacity:.7;font-size:12px">${s.bytes} bytes</span>
+        </div>
+        <div style="opacity:.88;font-size:12px;margin-top:4px">${escapeHtml(s.note || '')}</div>
+        ${detail}
+      </div>`;
+    }).join('');
+    return `
+      <div class="bubble" style="padding:0;overflow:hidden">
+        <div style="padding:12px 14px;background:rgba(255,255,255,.04);border-bottom:1px solid rgba(255,255,255,.06)">
+          <div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap">
+            <b style="font-family:ui-monospace,Menlo,monospace;color:#ffd49a">phase=${escapeHtml(r.phase)}</b>
+            <span style="opacity:.7;font-size:12px">${escapeHtml(r.dir || '')}</span>
+            <span style="opacity:.7;font-size:12px;margin-left:auto">${r.bytes} bytes total</span>
+          </div>
+          <div style="opacity:.92;margin-top:6px;line-height:1.5;font-size:13px">${escapeHtml(r.explainer || '')}</div>
+        </div>
+        ${segs}
+      </div>
+    `;
+  }).join('<div style="height:10px"></div>');
+  setPanel('#panel-psi', intro + '<div style="height:10px"></div>' + rounds);
+}
+
+function renderRefusalsReference(trace){
+  const refusal = trace ? _refusalFromTrace(trace) : null;
+  const activeCode = refusal?.error_code || null;
+  const rows = Object.entries(REFUSAL_HINTS).map(([code, { hint, audit }]) => {
+    const isActive = code === activeCode;
+    return `<tr${isActive ? ' style="background:rgba(255,124,124,.08)"' : ''}>
+      <td style="vertical-align:top;padding:8px 10px;font-family:ui-monospace,Menlo,monospace;color:${isActive ? '#FF7C7C' : '#FFD9A6'};white-space:nowrap">${escapeHtml(code)}${isActive ? ' &larr;' : ''}</td>
+      <td style="vertical-align:top;padding:8px 10px;opacity:.92">${escapeHtml(hint)}</td>
+      <td style="vertical-align:top;padding:8px 10px;font-family:ui-monospace,Menlo,monospace;opacity:.85;white-space:nowrap">${escapeHtml(audit)}</td>
+    </tr>`;
+  }).join('');
+  const intro = activeCode
+    ? `This run was refused with <b style="font-family:ui-monospace,Menlo,monospace;color:#FF7C7C">${escapeHtml(activeCode)}</b>. The full table is below for context.`
+    : `Every refusal the receiver can emit. Each row links the error code to the receiver-side check that produced it &mdash; useful while reading <code>_core.py</code> or designing tests.`;
+  setPanel('#panel-refusals', `
+    <div class="bubble">
+      <div style="font-weight:700;margin-bottom:8px">Receiver refusal codes</div>
+      <div style="opacity:.9;margin-bottom:12px">${intro}</div>
+      <table style="border-collapse:collapse;width:100%;font-size:13px">
+        <thead>
+          <tr style="text-align:left;border-bottom:1px solid rgba(255,255,255,.12)">
+            <th style="padding:6px 10px;font-weight:700">error_code</th>
+            <th style="padding:6px 10px;font-weight:700">What the receiver checked</th>
+            <th style="padding:6px 10px;font-weight:700">Audit event</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `);
 }
 
 function renderAll(trace){
@@ -470,11 +581,65 @@ function renderAll(trace){
   renderEnvelopes(trace);
   renderDirectives(trace);
   renderAudit(trace);
+  renderPsi(trace);
+  renderRefusalsReference(trace);
   renderLogs(trace);
+
+  // A run worth sharing is one that produced envelopes (the protocol actually ran).
+  const shareable = !!(trace?.envelopes?.length);
+  const btn = $('#btn-share-run');
+  if (btn) btn.disabled = !shareable;
 
   const ok = trace.result?.ok;
   if (ok) setChat(`Result: OK`);
   else setChat(`Result: ERROR — ${pretty(trace.result?.error || trace.result)}`);
+}
+
+async function shareCurrentRun(){
+  const trace = window.__lastTrace;
+  if (!trace){
+    setChat('No run to share yet — finish the walkthrough first.');
+    return;
+  }
+  const btn = $('#btn-share-run');
+  if (btn) { btn.disabled = true; btn.textContent = 'Sharing…'; }
+  try {
+    const res = await fetch('/api/runs', {method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({trace})});
+    const out = await res.json();
+    if (!out.ok || !out.run_id) throw new Error(out.error || 'save failed');
+    const url = `${location.origin}${location.pathname}?run=${out.run_id}`;
+    await copyText(url);
+    setChat(`Sharable link copied: ${url} (valid for ~24h, demo storage only)`);
+  } catch(e) {
+    setChat(`Share failed: ${e.message || e}`);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Share this run'; }
+  }
+}
+
+async function maybeLoadSharedRun(){
+  const params = new URLSearchParams(location.search);
+  const runId = params.get('run');
+  if (!runId) return false;
+  try {
+    const res = await fetch(`/api/runs/${encodeURIComponent(runId)}`);
+    if (!res.ok){
+      setChat(`Shared run ${runId} not found or expired.`);
+      return false;
+    }
+    const out = await res.json();
+    if (!out.ok || !out.trace){
+      setChat(`Shared run ${runId} not loadable.`);
+      return false;
+    }
+    showView('playground');
+    renderAll(out.trace);
+    setChat(`Viewing shared run ${runId}. Start a new walkthrough to make your own.`);
+    return true;
+  } catch(e) {
+    setChat(`Load shared run failed: ${e.message || e}`);
+    return false;
+  }
 }
 
 function attackState(){
@@ -482,6 +647,7 @@ function attackState(){
     tamper_session_id: $('#atk-session-id')?.checked || false,
     tamper_participants: $('#atk-participants')?.checked || false,
     tamper_msg1_payload: $('#atk-msg1')?.checked || false,
+    replay: $('#atk-replay')?.checked || false,
     psi_outcome: ($('#psi-fail')?.checked ? 'unsuccessful' : 'successful'),
   };
 }
@@ -533,8 +699,8 @@ let walkthrough = { active:false, step:0, trace:null, walk_id:null };
 const STEPS = [
   { title:'Discovery', text:'Fetch AgentCards and read AP3 extension (roles/ops/commitments/public key).', tab:'agentcard' },
   { title:'Compatibility', text:'Compute compatibility score + explanation (roles, common ops, commitment pairing).', tab:'audit' },
-  { title:'Send msg1', text:'Send ProtocolEnvelope msg1 over A2A JSON-RPC (inspect raw HTTP).', tab:'a2ahttp' },
-  { title:'Receiver checks', text:'Receiver validates session binding, participants, signature, msg1_hash, replay.', tab:'audit' },
+  { title:'Send first envelope', text:'Initiator sends the opening ProtocolEnvelope (phase init) over A2A JSON-RPC (inspect raw HTTP).', tab:'a2ahttp' },
+  { title:'Receiver checks', text:'Receiver validates session binding, participants, signature, payload_hash, replay.', tab:'audit' },
   { title:'Result', text:'Initiator produces and signs PrivacyResultDirective.', tab:'directives' },
 ];
 
@@ -625,6 +791,21 @@ $('#btn-back-lab').addEventListener('click', () => showView('lab'));
 
 $('#btn-walkthrough-start')?.addEventListener('click', startWalkthrough);
 $('#btn-walkthrough-reset')?.addEventListener('click', resetWalkthrough);
+$('#btn-share-run')?.addEventListener('click', shareCurrentRun);
+
+// Delegated copy-button handler: any element with [data-copy-payload]
+// copies its payload to clipboard. See copyButton() for the producer side.
+document.addEventListener('click', (e) => {
+  const btn = e.target?.closest?.('[data-copy-payload]');
+  if (btn) copyText(btn.getAttribute('data-copy-payload'));
+});
+
+$('#btn-attacks-reset')?.addEventListener('click', () => {
+  ['#atk-session-id', '#atk-participants', '#atk-msg1', '#atk-replay'].forEach(id => {
+    const el = $(id);
+    if (el) el.checked = false;
+  });
+});
 $('#btn-walkthrough-next')?.addEventListener('click', async () => {
   walkthrough.step = Math.min(STEPS.length-1, walkthrough.step+1);
 
@@ -635,7 +816,7 @@ $('#btn-walkthrough-next')?.addEventListener('click', async () => {
 
   // Step 3: send msg1 (no finalize).
   if (walkthrough.step === 2){
-    setChat('Walkthrough: sending msg1 (initiator → receiver)…');
+    setChat('Walkthrough: sending first envelope (initiator → receiver)…');
     const res = await fetch('/api/walkthrough/send_msg1', {method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({walk_id: walkthrough.walk_id, lab: labState(), attacks: attackState()})});
     const trace = await res.json();
     walkthrough.trace = trace;
@@ -683,6 +864,11 @@ refreshAgentCards();
 renderPsiDataPanel();
 renderOutcomeCard(null);
 renderFlow(null);
+renderRefusalsReference(null);
+renderPsi(null);
+
+// If launched via ?run=ID, fetch and render the shared run.
+maybeLoadSharedRun();
 
 ['#psi-success', '#psi-fail'].forEach(id => $(id)?.addEventListener('change', () => renderPsiDataPanel()));
 

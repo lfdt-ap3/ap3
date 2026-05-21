@@ -16,7 +16,7 @@ import contextlib
 
 import httpx
 
-from a2a.client import A2ACardResolver, ClientConfig, ClientFactory
+from a2a.client import A2ACardResolver, ClientConfig, create_client
 from a2a.types import AgentCard, Message, Role, SendMessageRequest
 
 from ap3.a2a.card import PeerInfo, extract_peer_info
@@ -118,9 +118,10 @@ class PeerClient:
         """
         card = await self._fetch_card(peer_url)
         async with self._http() as http:
-            client = ClientFactory(
-                config=ClientConfig(httpx_client=http)
-            ).create(card=card)
+            client = await create_client(
+                card,
+                client_config=ClientConfig(httpx_client=http),
+            )
 
             message = Message(role=Role.ROLE_USER, message_id=str(uuid.uuid4()))
             if context_id is not None:

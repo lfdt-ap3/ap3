@@ -103,9 +103,9 @@ version = "0.1.0"
 description = "AP3 PrivacyAgent PSI consumer"
 requires-python = ">=3.11,<3.14"
 dependencies = [
-  "a2a-sdk[http-server]>=1.0.2",
-  "ap3-functions>=1.2.1",
-  "ap3[a2a]>=1.2.1",
+  "a2a-sdk[http-server]>=1.0.3",
+  "ap3-functions>=1.2.2",
+  "ap3[a2a]>=1.2.2",
   "httpx>=0.28.1",
   "pydantic>=2.11.4",
   "starlette>=0.46.2",
@@ -129,9 +129,9 @@ version = "0.1.0"
 description = "AP3 PrivacyAgent PSI provider"
 requires-python = ">=3.11,<3.14"
 dependencies = [
-  "a2a-sdk[http-server]>=1.0.2",
-  "ap3-functions>=1.2.1",
-  "ap3[a2a]>=1.2.1",
+  "a2a-sdk[http-server]>=1.0.3",
+  "ap3-functions>=1.2.2",
+  "ap3[a2a]>=1.2.2",
   "httpx>=0.28.1",
   "pydantic>=2.11.4",
   "starlette>=0.46.2",

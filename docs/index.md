@@ -5,7 +5,7 @@ hide:
 
 <!-- markdownlint-disable MD041 -->
 <h1 style="display: flex; align-items: center; gap: 1.25rem; margin: 1.5rem 0 2rem; flex-wrap: wrap; font-size: 1.55rem; font-weight: 400; color: #6b6b6b; line-height: 1.1; letter-spacing: -0.01em;">
-  <img src="assets/ap3_logo_three_robots.svg" alt="AP3 — three robot agents in a row, linked by dashed encrypted channels" style="height: 130px; flex-shrink: 0;"/>
+  <img src="assets/AP3_Full_Logo.svg" alt="AP3 — three robot agents in a row, linked by dashed encrypted channels" style="height: 30px; flex-shrink: 0;"/>
   <span>Agent Privacy-Preserving Protocol (AP3)</span>
 </h1>
 
