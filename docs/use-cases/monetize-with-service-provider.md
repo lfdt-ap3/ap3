@@ -42,7 +42,7 @@ This is what an AP3 service-provider engagement looks like across the [AP3 Lifec
 3. **Accept a signed intent.** The initiator sends a [`PrivacyIntentDirective`](../directives.md): operation, participants, expiry, replay nonce, signed under their key. You verify everything *before* touching the cryptographic payload.
 4. **Run the operation.** Process the protocol rounds (e.g. PSI's `msg1` → `msg2`) inside your runtime. The cryptography enforces minimum disclosure.
 5. **Return a result.** A signed [`PrivacyResultDirective`](../directives.md) carrying the encoded result, an integrity hash, and metadata. The initiator verifies the signature against the key advertised in your AgentCard.
-6. **Get paid.** AP3 owns the privacy-preserving compute lane; **AP2 owns settlement**. As [the Overview](../index.md#ap2-and-ap3) puts it: *"AP3 produces a verifiable result, AP2 settles the fee that the receiving agent charges for participating."* Pricing, quoting, and settlement rails (AP2 / x402 / MPP) are the commercial layer on top of the verified result.
+6. **Get paid.** AP3 owns the privacy-preserving compute lane; **AP2 owns authorization**. As [the Overview](../index.md#ap2-and-ap3) puts it: *"AP3 produces a verifiable result, AP2 authorizes the payment, and x402 / MPP settle the fee that the receiving agent charges for participating."* Pricing, quoting, and settlement rails (AP2 / x402 / MPP) are the commercial layer on top of the verified result.
 
 !!! note "Where AP3 stops and where commerce begins"
     AP3 today gives you the **privacy + integrity** half: signed commitments, signed intents, signed results, replay protection, canonical signing for cross-language verification. Standardized **negotiation artifacts** (signed quotes, fees, limits) and **settlement** are tracked under [Stage 4 and Stage 8 of the Agentic Stack](../agentic-stack.md#stage-4-negotiate-how-will-we-collaborate) and on the [Roadmap](../roadmap.md). Today most teams paper over this with off-protocol contracts and explicit AP2 calls; first-class signed-terms artifacts come later.
@@ -55,14 +55,15 @@ AP3 stays out of the pricing lane on purpose. The protocol gives you the raw mat
 - A **directive** lets a counterparty open a session against a specific commitment and operation (think: order line).
 - A **signed result** lets the counterparty's agent prove to its own systems that the work it's about to pay for actually happened.
 
-[AP2](https://ap2-protocol.org/) is the standards-track way to settle the fee. The simplest pattern, paraphrased from the [Overview](../index.md#ap2-and-ap3): *AP3 produces a verifiable result; AP2 binds that result into a payment.* Quoting (prepaid vs postpaid), settlement rails, refund and dispute policy are negotiated on top.
+[AP2](https://ap2-protocol.org/) is the standards-track way to settle the fee. The simplest pattern, paraphrased from the [Overview](../index.md#ap2-and-ap3): *AP3 produces a verifiable result; AP2 creates verifiable authorization, settlement runs on the x402 / MPP or equivalent rails, or via wallets. * Quoting (prepaid vs postpaid), settlement rails, refund and dispute policy are negotiated on top.
 
 A typical commercial flow:
 
 1. **Quote.** Counterparty fetches your AgentCard, sees your commitments and supported operations, and asks for terms (operation, expected volume, optional SLA).
 2. **Order.** Counterparty's agent issues a [`PrivacyIntentDirective`](../directives.md) referencing the agreed operation and (eventually) a signed terms blob.
 3. **Execute.** Your service provider runs the operation in a TEE, returns a signed `PrivacyResultDirective`.
-4. **Settle.** AP2 binds the signed result + agreed terms into a payment instruction. The fee clears against the verifiable artifact, not a vague "we did some compute" claim.
+4. **Authorize.** AP2 binds the signed result + agreed terms into a payment instruction.
+5. **Settle.** The fee clears against the verifiable artifact, not a vague "we did some compute" claim. This happens via x402 / MPP rails
 
 ## Today vs. on the roadmap
 
@@ -75,7 +76,7 @@ A typical commercial flow:
 | **Real proof of computation** | Placeholder fields only (`attestation="experimental_placeholders"`) | TEE attestation, ZK proofs, receiver-signed receipts |
 | Key rotation / revocation | Operational only | Protocol semantics in discovery + verification |
 | Standard negotiation artifacts (signed terms, fees) | Off-protocol | First-class artifacts |
-| Settlement | Out of scope (use AP2) | Tighter binding to verified results |
+| Authorization & Settlement | Out of scope (use AP2) | Tighter binding to verified results |
 
 The honest summary: **the wire format and message contract are stable; cryptographic proof of correct execution is the active work.** A service provider that deploys inside a TEE today is buying the upgrade path — when the proof slot turns real, your existing deployment fills it without re-architecting.
 

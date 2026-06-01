@@ -55,9 +55,9 @@ AP3 is intentionally narrow: it owns the **privacy-preserving compute lane**. Mo
 
 ### AP2 and AP3
 
-- **[AP2](https://ap2-protocol.org/)** is the payment-focused protocol in the Agent2Agent ecosystem. It facilitates settlement, value transfer, and other financial primitives between agents.
+- **[AP2](https://ap2-protocol.org/)** is the payment-focused protocol in the Agent2Agent ecosystem. Provides verifiable authorization for agent initiated payments
 - **AP3** is a privacy-preserving collaboration protocol that lets agents jointly compute on sensitive data without revealing it.
-- Use them together: AP2 handles payments, AP3 handles collaborative computation when parties need cryptographic privacy guarantees. A typical flow: AP3 produces a verifiable result (e.g. "candidate is not blacklisted"), AP2 settles the fee that the receiving agent charges for participating.
+- Use them together: AP2 handles payments, AP3 handles collaborative computation when parties need cryptographic privacy guarantees. A typical flow: AP3 produces a verifiable result (e.g. "candidate is not blacklisted"), AP2 authorizes the payment, and protocols such as x402 / MPP enable settlement
 
 ## Build with AP3
 
