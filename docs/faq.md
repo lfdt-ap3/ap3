@@ -23,7 +23,7 @@ No, not for the protocol itself. PSI runs on regular machines. A TEE becomes the
 
 ## What's the relationship between AP3 and AP2?
 
-They compose: **AP3 produces a verifiable result, AP2 settles the fee**. AP3 owns the privacy-preserving compute lane (signed commitments, signed intents, signed results, replay protection); AP2 (and rails like x402, MPP) own pricing, quoting, and settlement. See the [Overview](index.md#ap2-and-ap3) for the framing and [Monetize Your Data](use-cases/monetize-with-service-provider.md) for the operator's view.
+They compose: **AP3 produces a verifiable result, AP2 authorizes the payment**. AP3 owns the privacy-preserving compute lane (signed commitments, signed intents, signed results, replay protection); AP2 (and rails like x402, MPP) own pricing, quoting, and settlement. See the [Overview](index.md#ap2-and-ap3) for the framing and [Monetize Your Data](use-cases/monetize-with-service-provider.md) for the operator's view.
 
 ## Can I use AP3 without A2A?
 
