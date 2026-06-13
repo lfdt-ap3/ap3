@@ -66,6 +66,10 @@ class PrivacyAgentExecutor(AgentExecutor):
         self._llm = llm_executor
 
     async def execute(self, context: RequestContext, event_queue: EventQueue) -> None:
+        # The A2A request handler populates these before dispatch; assert rather
+        # than defensively branch, so a future SDK change can't slip a None past.
+        assert context.task_id is not None and context.context_id is not None
+        assert context.message is not None
         updater = TaskUpdater(event_queue, context.task_id, context.context_id)
         # a2a-sdk v1.x expects the task to exist in the stream before any
         # TaskStatusUpdateEvent. The request handler will persist/create the task,

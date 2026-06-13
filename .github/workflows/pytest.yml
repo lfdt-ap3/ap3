@@ -9,6 +9,30 @@ on:
       - main
 
 jobs:
+  lint:
+    name: Lint & Types
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install uv
+          uv pip install --system -e ".[a2a,dev]" -e ./packages/ap3-functions
+
+      - name: Ruff
+        run: ruff check .
+
+      - name: Mypy
+        run: mypy src/ap3 packages/ap3-functions/ap3_functions
+
   test-unit:
     name: Unit Tests
     runs-on: ubuntu-latest
