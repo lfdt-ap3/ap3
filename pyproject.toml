@@ -40,6 +40,7 @@ dev = [
     "pytest-mock>=3.11.0",
     "ruff>=0.1.0",
     "mypy>=1.5.0",
+    "types-protobuf>=5.29",
 ]
 
 [build-system]
@@ -71,8 +72,32 @@ dev = [
     "pytest-mock>=3.11.0",
     "ruff>=0.1.0",
     "mypy>=1.5.0",
+    "types-protobuf>=5.29",
 ]
 
 [tool.uv.sources]
 ap3-functions = { workspace = true }
 ap3 = { workspace = true }
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+# Keep ruff's default E/F rules and add S101: a bare `assert` is stripped under
+# `python -O`, so it must never stand in for a runtime guard in shipped code.
+extend-select = ["S101"]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests and runnable examples use `assert` as an assertion, not a guard.
+"tests/**" = ["S101"]
+"examples/**" = ["S101"]
+
+[tool.mypy]
+python_version = "3.11"
+
+# Third-party packages that ship no type information. Scoped per-module so a
+# real type error in our own code is never masked by a blanket ignore.
+[[tool.mypy.overrides]]
+module = ["rbcl.*", "merlin_transcripts.*", "a2a.*"]
+ignore_missing_imports = true
