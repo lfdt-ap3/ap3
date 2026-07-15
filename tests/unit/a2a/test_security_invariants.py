@@ -339,10 +339,9 @@ async def test_intent_operation_type_mismatch_is_refused(monkeypatch):
     """An intent claiming a different operation_type than the receiver runs
     must never reach the operation layer.
 
-    Today pydantic's `Literal["PSI"]` rejects any other value at parse time
-    (INVALID_INTENT); the framework's explicit `INTENT_OPERATION_MISMATCH`
-    check is a defense-in-depth backstop for when a second operation type
-    lands and the Literal admits more than one value.
+    Mutating `operation_type` after signing breaks the signature
+    (BAD_SIGNATURE); the framework's explicit `INTENT_OPERATION_MISMATCH`
+    check is a defense-in-depth backstop.
     """
     agent, _, _ = _make_receiver()
     init_priv, init_pub = _make_initiator_keys()

@@ -8,7 +8,9 @@ from pydantic import Field
 from pydantic import AliasChoices
 
 #### Operation types
-OperationType = Literal["PSI"]
+# Operation IDs are opaque to the SDK. Concrete operations (e.g. "PSI") live
+# in separate packages such as ap3-functions and pick their own operation_id.
+OperationType = str
 
 #### Role types
 AP3Role = Literal["ap3_initiator", "ap3_receiver"]

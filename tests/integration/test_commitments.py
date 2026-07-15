@@ -203,12 +203,17 @@ class TestCommitmentCompatibilityWorkflow:
             commitments=[retail_metadata]
         )
 
-        # Agent 2: Finance (different industry)
+        # Agent 2: Finance with a stale (WEEKLY) commitment — generic
+        # freshness rule refuses this regardless of operation type.
         finance_schema = DataSchema(
             structure=DataStructure.FINANCIAL_RECORDS,
             format=DataFormat.STRUCTURED,
             fields=["account_id"],
-            metadata={"industry": "finance", "coverage_area": "global"}
+            metadata={
+                "industry": "finance",
+                "coverage_area": "global",
+                "update_frequency": "weekly",
+            },
         )
         finance_commitment = system.create_commitment(
             agent_id="finance_agent",
@@ -224,11 +229,9 @@ class TestCommitmentCompatibilityWorkflow:
             commitments=[finance_metadata]
         )
 
-        # Check compatibility
         score, explanation = CommitmentCompatibilityChecker.score_parameter_pair_compatibility(
             retail_params, finance_params, operation_type="PSI"
         )
 
-        # Should have roles + operations but fail on commitments
         assert score < 1.0
-        assert "PSI requires" in explanation
+        assert "fresh" in explanation.lower()
