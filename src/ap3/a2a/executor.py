@@ -21,6 +21,7 @@ from a2a.server.tasks import TaskUpdater
 from a2a.types import Task, TaskState, TaskStatus
 from a2a.utils.errors import UnsupportedOperationError
 
+from ap3.a2a.card import AP3_EXTENSION_URI
 from ap3.a2a.wire import ProtocolEnvelope, envelope_from_parts
 
 logger = logging.getLogger(__name__)
@@ -66,12 +67,28 @@ class PrivacyAgentExecutor(AgentExecutor):
         self._llm = llm_executor
 
     async def execute(self, context: RequestContext, event_queue: EventQueue) -> None:
-        # The A2A request handler populates these before dispatch. Guard
-        # explicitly rather than `assert`: asserts are stripped under `python -O`,
-        # which would let a None reach TaskUpdater or `context.message.parts`.
         if context.task_id is None or context.context_id is None or context.message is None:
             raise ValueError("A2A request context missing task_id, context_id, or message")
+
         updater = TaskUpdater(event_queue, context.task_id, context.context_id)
+
+        if AP3_EXTENSION_URI not in context.requested_extensions:
+            logger.warning(
+                "rejecting request: client did not advertise %s in A2A-Extensions header",
+                AP3_EXTENSION_URI,
+            )
+            if not context.current_task:
+                await event_queue.enqueue_event(
+                    Task(
+                        id=context.task_id,
+                        context_id=context.context_id,
+                        status=TaskStatus(state=TaskState.TASK_STATE_REJECTED),
+                    )
+                )
+            await updater.update_status(TaskState.TASK_STATE_REJECTED)
+            return
+
+        parts = list(context.message.parts)
         # a2a-sdk v1.x expects the task to exist in the stream before any
         # TaskStatusUpdateEvent. The request handler will persist/create the task,
         # but we also enqueue an initial Task event to satisfy strict stream
@@ -88,7 +105,7 @@ class PrivacyAgentExecutor(AgentExecutor):
         await updater.update_status(TaskState.TASK_STATE_WORKING)
 
         try:
-            envelope = envelope_from_parts(list(context.message.parts))
+            envelope = envelope_from_parts(parts)
         except ValueError as exc:
             # Multi-envelope, oversized envelope, or malformed envelope from
             # `envelope_from_parts`. Refuse cleanly with a structured failure
@@ -121,7 +138,13 @@ class PrivacyAgentExecutor(AgentExecutor):
             await updater.complete()
             return
         from ap3.a2a.wire import envelope_to_part  # avoid cycle at module load
-        await updater.add_artifact([envelope_to_part(reply)], last_chunk=True)
+        # Echo activated extension URI on the returned artifact so the peer
+        # can confirm we handled the envelope under the extension it activated.
+        await updater.add_artifact(
+            [envelope_to_part(reply)],
+            last_chunk=True,
+            extensions=[AP3_EXTENSION_URI],
+        )
         await updater.complete()
 
     async def cancel(self, context: RequestContext, event_queue: EventQueue) -> None:
