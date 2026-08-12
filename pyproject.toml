@@ -84,9 +84,14 @@ target-version = "py311"
 line-length = 100
 
 [tool.ruff.lint]
-# Keep ruff's default E/F rules and add S101: a bare `assert` is stripped under
-# `python -O`, so it must never stand in for a runtime guard in shipped code.
-extend-select = ["S101"]
+# Select the rule set explicitly instead of using `extend-select`. ruff 0.16
+# grew its defaults from 59 rules to 413, and `extend-select` inherits whatever
+# the defaults happen to be — so that release turned on ~354 unrequested rules
+# and broke CI on an unchanged tree. E4/E7/E9/F is ruff's pre-0.16 default and
+# is the gate this project actually intends. S101: a bare `assert` is stripped
+# under `python -O`, so it must never stand in for a runtime guard in shipped
+# code.
+select = ["E4", "E7", "E9", "F", "S101"]
 
 [tool.ruff.lint.per-file-ignores]
 # Tests and runnable examples use `assert` as an assertion, not a guard.
