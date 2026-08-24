@@ -115,11 +115,16 @@ def envelope_from_parts(parts: list[Part]) -> Optional[ProtocolEnvelope]:
     raw = found[0]
     # Cheap length proxy without re-serializing — `Struct` -> dict gives us
     # the on-wire shape, and JSON is the canonical encoding for transit.
+    import json as _json
     try:
-        import json as _json
         encoded_size = len(_json.dumps(raw, ensure_ascii=False).encode("utf-8"))
-    except Exception:
-        encoded_size = 0
+    except Exception as exc:
+        # Fail closed. An envelope we cannot measure is one we cannot cap, and
+        # this check exists specifically to keep a hostile peer from starving
+        # the receiver of memory. The realistic trigger is RecursionError on a
+        # deeply nested payload — exactly the shape the cap is here to reject —
+        # so treating "unmeasurable" as "under the limit" inverted the guard.
+        raise ValueError(f"AP3 envelope could not be measured: {exc}") from exc
     if encoded_size > MAX_ENVELOPE_JSON_BYTES:
         raise ValueError(
             f"AP3 envelope too large: {encoded_size} bytes "

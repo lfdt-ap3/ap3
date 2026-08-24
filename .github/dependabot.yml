@@ -1,0 +1,101 @@
+# Dependabot configuration for the AP3 repository.
+#
+# Layout: one `updates` entry per ecosystem, and inside each entry a group for
+# scheduled version updates plus — where the ecosystem supports it — a separate
+# group for advisory-driven security updates.
+#
+# `applies-to` defaults to `version-updates`, so a security group MUST name
+# `security-updates` explicitly. Without it, advisory fixes bypass grouping and
+# arrive as one PR per alert (the 42 open alerts of Feb 2026 would have been 42
+# pull requests).
+#
+# `schedule` governs version updates only. Security updates are triggered by
+# published advisories and open as soon as Dependabot sees one, on any day.
+version: 2
+
+updates:
+  # --- Python: uv workspace (pyproject.toml + uv.lock) ----------------------
+  # `uv` is the ecosystem that regenerates uv.lock; `pip` is not. Do NOT add a
+  # `pip` entry for "/" alongside this one — two ecosystems resolving the same
+  # pyproject.toml race each other and leave the lockfile out of sync.
+  # The uv workspace resolves every member (packages/*, examples/*) into the
+  # single root lock, so "/" is the only directory needed here.
+  - package-ecosystem: "uv"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    groups:
+      python-security:
+        applies-to: security-updates
+        patterns:
+          - "*"
+      python-version:
+        applies-to: version-updates
+        patterns:
+          - "*"
+        # Majors are deliberately excluded so they arrive as individual,
+        # reviewable PRs. google-adk 1.x -> 2.x moved LiteLlm behind an extra
+        # and dropped ~50 transitive packages; that is not a change to land
+        # inside a batch of routine bumps. Drop these two lines to put
+        # everything in one PR.
+        update-types:
+          - "minor"
+          - "patch"
+
+  # --- GitHub Actions -------------------------------------------------------
+  # Actions in .github/workflows are SHA-pinned on purpose (see the codecov
+  # comment in pytest.yml). Dependabot updates the SHA and refreshes the
+  # trailing version comment; it does not revert pins to floating tags.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    groups:
+      actions-security:
+        applies-to: security-updates
+        patterns:
+          - "*"
+      actions-version:
+        applies-to: version-updates
+        patterns:
+          - "*"
+
+  # --- Docker: example image bases (Dockerfiles) ----------------------------
+  # Version updates only: container base images are not in the GitHub Advisory
+  # Database, so Dependabot has no security-update stream for `docker`. Base
+  # image CVEs surface through image scanning, not here.
+  # These are demo images, not shipped artifacts, so they update monthly.
+  - package-ecosystem: "docker"
+    directories:
+      - "/examples/a2a-example/company_a"
+      - "/examples/a2a-example/company_b"
+      - "/examples/ap3_playground"
+      - "/examples/psi_simple"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 3
+    groups:
+      docker-version:
+        applies-to: version-updates
+        patterns:
+          - "*"
+
+  # --- Docker Compose: example stacks ---------------------------------------
+  # `docker-compose` is a distinct ecosystem from `docker`; the Dockerfile entry
+  # above does not cover compose files. Version updates only, same reason.
+  - package-ecosystem: "docker-compose"
+    directories:
+      - "/examples/a2a-example"
+      - "/examples/psi_simple"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 3
+    groups:
+      compose-version:
+        applies-to: version-updates
+        patterns:
+          - "*"

@@ -557,6 +557,44 @@ async def test_oversized_envelope_is_rejected():
 
 
 @pytest.mark.asyncio
+async def test_unmeasurable_envelope_is_rejected(monkeypatch):
+    """4.13b: if the size probe raises, the cap fails closed, not open.
+
+    The probe used to swallow every exception and substitute a size of 0,
+    which skipped the cap entirely for exactly the pathological payloads
+    (e.g. RecursionError on deep nesting) it exists to reject.
+    """
+    import json
+
+    from a2a.types import Part
+    from google.protobuf.struct_pb2 import Struct, Value
+
+    from ap3.a2a.wire import AP3_ENVELOPE_DATA_KEY, envelope_from_parts
+
+    raw = {
+        "ap3_wire_version": "1.0",
+        "operation": PSIOperation.operation_id,
+        "phase": "msg1",
+        "session_id": "sid",
+        "payload": "small",
+    }
+    struct = Struct()
+    struct.update({AP3_ENVELOPE_DATA_KEY: raw})
+    part = Part(data=Value(struct_value=struct))
+
+    # Sanity check: this envelope parses fine while the probe works.
+    assert envelope_from_parts([part]) is not None
+
+    def _boom(*args, **kwargs):
+        raise RecursionError("maximum recursion depth exceeded")
+
+    monkeypatch.setattr(json, "dumps", _boom)
+
+    with pytest.raises(ValueError, match="could not be measured"):
+        envelope_from_parts([part])
+
+
+@pytest.mark.asyncio
 async def test_multi_envelope_parts_are_rejected():
     """L2-2: two AP3 envelopes on a single message is a refusal, not first-wins."""
     from a2a.types import Part
