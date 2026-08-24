@@ -4,8 +4,10 @@ Design goals:
 - **Explainable**: return the reason for refusal, not just a boolean.
 - **Realistic**: select the best pair among commitments (even if today most
   deployments only publish one).
-- **Protocol-aware (optional)**: allow the caller to tighten rules for a
-  particular operation type (e.g. PSI).
+- **Operation-agnostic**: the SDK does not know about specific operations.
+  The `operation_type` parameter flows through as an opaque tag; operations
+  that need stricter pairing rules must plug in their own
+  `compatibility_scorer` (see `AP3Middleware`).
 """
 
 from __future__ import annotations
@@ -17,8 +19,6 @@ from ap3.types import (
     AP3ExtensionParameters,
     CommitmentMetadata,
     DataFreshness,
-    DataFormat,
-    DataStructure,
 )
 
 
@@ -66,19 +66,7 @@ class CommitmentCompatibilityChecker:
                 f" (note: industry differs: {commitment1.industry} vs {commitment2.industry})"
             )
 
-        if operation_type == "PSI":
-            # Current PSI examples assume structured records.
-            if commitment1.data_format != DataFormat.STRUCTURED:
-                return False, "PSI requires structured data format"
-
-            # Pragmatic PSI pairing: list-vs-list (customer list vs sanctions/blacklist).
-            allowed_structures = {DataStructure.CUSTOMER_LIST, DataStructure.BLACKLIST}
-            if (
-                commitment1.data_structure not in allowed_structures
-                or commitment2.data_structure not in allowed_structures
-            ):
-                allowed = ", ".join(sorted(s.value for s in allowed_structures))
-                return False, f"PSI requires commitments with data_structure in [{allowed}]"
+        del operation_type
 
         return True, f"Compatible: aligned format and freshness{industry_note}"
 

@@ -18,7 +18,7 @@ import logging
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Any, Callable, Optional, cast
+from typing import Any, Callable, Optional
 
 from ap3.a2a.card import normalize_url
 from ap3.a2a.client import PeerClient, PeerInfo
@@ -29,7 +29,6 @@ from ap3.services.compatibility import CommitmentCompatibilityChecker
 from ap3.signing.canonical import canonical_json_bytes
 from ap3.types import (
     OperationProofs,
-    OperationType,
     PrivacyError,
     PrivacyIntentDirective,
     PrivacyProtocolError,
@@ -661,10 +660,7 @@ class _ProtocolCore:
         intent = PrivacyIntentDirective(
             ap3_session_id=session_id,
             intent_directive_id=str(uuid.uuid4()),
-            # The core is generic over operation type (a str); the directive
-            # pins Literal["PSI"]. Pydantic re-validates the value at
-            # construction, so this narrows the type without weakening the check.
-            operation_type=cast(OperationType, self._operation_type),
+            operation_type=self._operation_type,
             # Both URLs go through `normalize_url` so a peer that compares
             # against its own self_url with different trailing-slash/case/port
             # gets a match on legitimate traffic.
