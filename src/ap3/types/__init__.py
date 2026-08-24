@@ -1,6 +1,7 @@
 """Agent Privacy-Preserving Protocol (AP3) types."""
 
 # Core types
+from ap3.types.core import AP3_EXTENSION_URI
 from ap3.types.core import OperationType
 from ap3.types.core import AP3Role
 from ap3.types.core import DataStructure
@@ -50,6 +51,7 @@ __all__ = [
     "PrivacyProtocolError",
     
     # Constants
+    "AP3_EXTENSION_URI",
     "PRIVACY_INTENT_DIRECTIVE_DATA_KEY",
     "PRIVACY_RESULT_DIRECTIVE_DATA_KEY",
 ]
