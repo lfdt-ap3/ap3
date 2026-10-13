@@ -154,8 +154,6 @@ def build_privacy_agent_card(
         required=True,
     )
     ext.params.CopyFrom(params)
-    if card.capabilities.extensions is None:
-        card.capabilities.extensions = []
     card.capabilities.extensions.append(ext)
     return card
 

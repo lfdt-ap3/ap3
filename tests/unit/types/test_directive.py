@@ -68,20 +68,22 @@ class TestPrivacyIntentDirective:
         assert "expired" in error.lower()
 
     @pytest.mark.unit
-    def test_validate_directive_invalid_operation(self, sample_session_id, future_time):
-        """Test validation fails with invalid operation type."""
-        # Pydantic validates on construction, so this should raise ValidationError
-        with pytest.raises(Exception) as exc_info:  # Catches pydantic ValidationError
-            PrivacyIntentDirective(
-                ap3_session_id=sample_session_id,
-                intent_directive_id=str(uuid.uuid4()),
-                operation_type="INVALID_OP",  # Invalid operation
-                participants=["http://agent1.example.com", "http://agent2.example.com"],
-                expiry=future_time.isoformat()
-            )
-        
-        # Verify it's a validation error about operation_type
-        assert "operation_type" in str(exc_info.value).lower() or "literal" in str(exc_info.value).lower()
+    def test_validate_directive_empty_operation_type(self, sample_session_id, future_time):
+        """operation_type is a free string but must be non-empty at validate time."""
+        directive = PrivacyIntentDirective(
+            ap3_session_id=sample_session_id,
+            intent_directive_id=str(uuid.uuid4()),
+            operation_type="   ",
+            participants=["http://agent1.example.com", "http://agent2.example.com"],
+            nonce="nonce_test",
+            payload_hash="0" * 64,
+            expiry=future_time.isoformat(),
+        )
+
+        is_valid, error = directive.validate_directive()
+
+        assert not is_valid
+        assert "operation_type" in error.lower()
 
     @pytest.mark.unit
     def test_is_expired_future_time(self, sample_privacy_intent_directive):

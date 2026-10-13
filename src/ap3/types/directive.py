@@ -95,9 +95,8 @@ class PrivacyIntentDirective(BaseModel):
         if self.is_expired():
             return False, "Directive has expired"
         
-        # Valid operation type (pydantic already enforces the Literal)
-        if self.operation_type not in ["PSI"]:
-            return False, f"Invalid operation type: {self.operation_type}"
+        if not isinstance(self.operation_type, str) or not self.operation_type.strip():
+            return False, "operation_type must be a non-empty string"
 
         if not isinstance(self.nonce, str) or not self.nonce.strip():
             return False, "Missing nonce"
