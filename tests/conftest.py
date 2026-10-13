@@ -180,7 +180,7 @@ def mock_agent_card():
         "capabilities": {
             "extensions": [
                 {
-                    "uri": "https://github.com/lfdt-ap3/ap3/tree/main",
+                    "uri": "https://github.com/lfdt-ap3/ap3/v1",
                     "description": "AP3 extension",
                     "params": {
                         "roles": ["ap3_receiver"],

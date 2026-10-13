@@ -24,9 +24,8 @@ from a2a.types import (
 )
 
 from ap3.a2a.wire import AP3_WIRE_VERSION
-from ap3.types import AP3ExtensionParameters, CommitmentMetadata
+from ap3.types import AP3_EXTENSION_URI, AP3ExtensionParameters, CommitmentMetadata
 
-AP3_EXTENSION_URI = "https://github.com/lfdt-ap3/ap3"
 _PARAM_AP3_VERSION = "ap3_version"
 _PARAM_WIRE_VERSION = "ap3_wire_version"
 _PARAM_PUBLIC_KEY = "public_key_hex"
@@ -154,8 +153,6 @@ def build_privacy_agent_card(
         required=True,
     )
     ext.params.CopyFrom(params)
-    if card.capabilities.extensions is None:
-        card.capabilities.extensions = []
     card.capabilities.extensions.append(ext)
     return card
 

@@ -67,11 +67,8 @@ class TestLiteralTypes:
     @pytest.mark.unit
     def test_operation_type(self):
         """Test OperationType literal type."""
-        # These should be valid values
-        op1: OperationType = "PSI"
-        op2: OperationType = "PIR"
-        assert op1 == "PSI"
-        assert op2 == "PIR"
+        op: OperationType = "PSI"
+        assert op == "PSI"
 
     @pytest.mark.unit
     def test_ap3_role(self):
@@ -202,7 +199,7 @@ class TestAP3ExtensionParameters:
         assert "uri" in extension
         assert "description" in extension
         assert "params" in extension
-        assert extension["uri"] == "https://github.com/lfdt-ap3/ap3"
+        assert extension["uri"] == "https://github.com/lfdt-ap3/ap3/v1"
         assert "params" in extension
         assert "roles" in extension["params"]
 

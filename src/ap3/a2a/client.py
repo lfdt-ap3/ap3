@@ -17,9 +17,14 @@ import contextlib
 import httpx
 
 from a2a.client import A2ACardResolver, ClientConfig, create_client
+from a2a.client.client import ClientCallContext
+from a2a.client.service_parameters import (
+    ServiceParametersFactory,
+    with_a2a_extensions,
+)
 from a2a.types import AgentCard, Message, Role, SendMessageRequest
 
-from ap3.a2a.card import PeerInfo, extract_peer_info
+from ap3.a2a.card import AP3_EXTENSION_URI, PeerInfo, extract_peer_info
 from ap3.a2a.wire import ProtocolEnvelope, envelope_from_parts, envelope_to_part
 
 logger = logging.getLogger(__name__)
@@ -129,9 +134,20 @@ class PeerClient:
             message.parts.append(envelope_to_part(envelope))
             request = SendMessageRequest(message=message)
 
+            # A2A spec: client SHOULD advertise activated extensions on every
+            # request via the `A2A-Extensions` header. The transport reads
+            # `ClientCallContext.service_parameters` and copies it into HTTP
+            # headers. Sending this on every AP3 envelope guarantees a peer
+            # whose extension is `required=True` will not reject us.
+            call_context = ClientCallContext(
+                service_parameters=ServiceParametersFactory.create(
+                    [with_a2a_extensions([AP3_EXTENSION_URI])]
+                )
+            )
+
             last_task = None
             reply: Optional[ProtocolEnvelope] = None
-            async for event in client.send_message(request):
+            async for event in client.send_message(request, context=call_context):
                 which = event.WhichOneof("payload")
                 if which == "task":
                     last_task = event.task

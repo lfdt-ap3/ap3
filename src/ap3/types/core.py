@@ -7,6 +7,8 @@ from pydantic import ConfigDict
 from pydantic import Field
 from pydantic import AliasChoices
 
+AP3_EXTENSION_URI = "https://github.com/lfdt-ap3/ap3/v1"
+
 #### Operation types
 OperationType = Literal["PSI"]
 
@@ -146,7 +148,7 @@ class AP3ExtensionParameters(BaseModel):
         This formats the AP3 params in the structure needed for agent card extensions.
         """
         return {
-            "uri": "https://github.com/lfdt-ap3/ap3",
+            "uri": AP3_EXTENSION_URI,
             "description": "AP3 extension for privacy-preserving agent collaboration",
             "params": self.model_dump(mode='python'),
             "required": True

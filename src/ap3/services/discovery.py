@@ -5,17 +5,11 @@ from typing import Dict, Optional, Tuple
 
 import httpx
 
+from ap3.a2a.card import AP3_EXTENSION_URI
 from ap3.types import AP3ExtensionParameters
 from ap3.services.compatibility import CommitmentCompatibilityChecker
 
 logger = logging.getLogger(__name__)
-
-_AP3_EXTENSION_URIS = (
-    # Current canonical URI (used by `ap3.a2a.card.build_privacy_agent_card`)
-    "https://github.com/lfdt-ap3/ap3",
-    # Legacy URI seen in older docs/examples
-    "https://github.com/lfdt-ap3/ap3/tree/main",
-)
 
 class RemoteAgentDiscoveryService:
     """Service for discovering and checking compatibility with remote agents.
@@ -62,7 +56,7 @@ class RemoteAgentDiscoveryService:
             extensions = capabilities.get("extensions", [])
 
             for ext in extensions:
-                if ext.get("uri") in _AP3_EXTENSION_URIS:
+                if ext.get("uri") == AP3_EXTENSION_URI:
                     params = ext.get("params", {})
                     return AP3ExtensionParameters.model_validate(params)
 
