@@ -74,6 +74,13 @@ class PrivacyIntentDirective(BaseModel):
         ),
     )
     expiry: str = Field(..., description="Expiry time in ISO 8601 format")
+    # Signed when set. Unset fields stay off the wire, so peers without them still parse and verify.
+    purpose: Optional[str] = Field(
+        None, description="Why the initiator runs this check, e.g. credit_underwriting"
+    )
+    legal_basis: Optional[str] = Field(
+        None, description="The basis the initiator relies on, e.g. borrower_consent:<ref>"
+    )
     signature: Optional[str] = Field(
         None,
         description="Cryptographic signature of the initiator agent"

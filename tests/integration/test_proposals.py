@@ -1,4 +1,4 @@
-"""Live agents on ports 19140-19156.
+"""Live agents on ports 19140-19172.
 
 Remember keeps the context it was given. inputs['send'] is the only path that puts an envelope on the wire.
 """
@@ -8,8 +8,9 @@ import time
 from datetime import datetime, timezone
 
 import pytest
+from sse_starlette.sse import AppStatus
 
-from ap3 import Operation, OperationResult
+from ap3 import Operation, OperationRefusal, OperationResult
 from ap3.a2a.agent import PrivacyAgent
 from ap3.a2a.client import PeerClient
 from ap3.services.commitment import CommitmentMetadataSystem
@@ -22,6 +23,12 @@ from ap3.types import (
     Industry,
     PrivacyProtocolError,
 )
+
+
+@pytest.fixture(autouse=True)
+def fresh_sse_status(monkeypatch):
+    # Process-wide. A server stopped with a stream open leaves it True, and later streams close at once.
+    monkeypatch.setattr(AppStatus, "should_exit", False)
 
 
 def commitment(agent_id, structure, **extra):
@@ -66,11 +73,12 @@ class Remember(Operation):
     def on_process(self, role, state, message, config, context):
         if role == "receiver":
             self.received = True
+            self.contexts.append(context)
             return OperationResult(done=True, outgoing={"phase": "pong", "message": "hi"})
         return OperationResult(done=True, result={"ok": True})
 
 
-def agent(name, port, role, operation, private_key, public_key, structure, bad=False, peer_client=None, **extra):
+def agent(name, port, role, operation, private_key, public_key, structure, bad=False, peer_client=None, allowed_purposes=None, **extra):
     meta = commitment(name, structure, **extra)
     if bad:
         meta = tampered(meta, private_key)
@@ -87,6 +95,7 @@ def agent(name, port, role, operation, private_key, public_key, structure, bad=F
         public_key=public_key,
         peer_client=peer_client,
         allow_private_initiator_urls=True,
+        allowed_purposes=allowed_purposes,
     )
 
 
@@ -217,6 +226,42 @@ async def test_run_intents_refuses_duplicate_urls():
 
 
 @pytest.mark.asyncio
+async def test_run_intents_deadline_covers_running_and_queued_peers(monkeypatch):
+    """Given one slot, B answers, C never replies, and D waits for C's slot. When A calls run_intents with deadline_s. Then B is a result, C and D are DEADLINE_EXCEEDED, and A keeps no open session."""
+    remember = Remember()
+    asking = agent("agent_a", 19159, "ap3_initiator", remember, *generate_keypair(), DataStructure.CUSTOMER_LIST)
+    bee = agent("agent_b", 19160, "ap3_receiver", Remember(), *generate_keypair(), DataStructure.BLACKLIST)
+    cee = agent("agent_c", 19161, "ap3_receiver", Remember(), *generate_keypair(), DataStructure.BLACKLIST)
+    release = asyncio.Event()
+
+    async def stall(envelope):
+        await release.wait()
+
+    monkeypatch.setattr(cee, "handle_envelope", stall)
+    urls = ["http://localhost:19160", "http://localhost:19161", "http://localhost:19162"]
+    async with asking.serving(), bee.serving(), cee.serving():
+        started = time.monotonic()
+        results = await asking.run_intents(
+            peer_urls=urls, inputs={"send": True}, max_concurrency=1, deadline_s=0.5
+        )
+        took = time.monotonic() - started
+        release.set()
+    assert not isinstance(results[urls[0]], BaseException)
+    assert results[urls[1]].error.error_code == "DEADLINE_EXCEEDED"
+    assert results[urls[2]].error.error_code == "DEADLINE_EXCEEDED"
+    assert took < 2
+    assert not remember._sessions
+
+
+@pytest.mark.asyncio
+async def test_run_intents_refuses_a_non_positive_deadline():
+    """Given deadline_s=0. When run_intents is called. Then ValueError."""
+    asking = agent("agent_a", 19163, "ap3_initiator", Remember(), *generate_keypair(), DataStructure.CUSTOMER_LIST)
+    with pytest.raises(ValueError):
+        await asking.run_intents(peer_urls=["http://peer.example"], inputs={}, deadline_s=0)
+
+
+@pytest.mark.asyncio
 async def test_update_commitment_is_what_a_refresh_reads():
     """Given C serving v=1. When C publishes v=2. Then a cached read still shows v=1, and refresh_peer=True shows v=2."""
     a_key = generate_keypair()
@@ -249,3 +294,115 @@ async def test_update_commitment_is_what_a_refresh_reads():
         await asking.run_intent(peer_url="http://localhost:19151", inputs={}, refresh_peer=True)
     versions = [ctx["peer_commitments"][0].operation_params["v"] for ctx in remember.contexts]
     assert versions == ["1", "1", "2"]
+
+
+STOCK_INTENT_FIELDS = {
+    "ap3_session_id", "intent_directive_id", "operation_type", "participants",
+    "nonce", "payload_hash", "expiry", "signature",
+}
+
+
+def test_intent_without_purpose_has_the_stock_wire_shape():
+    """Given no purpose or legal_basis. When an intent is built and dumped for the wire. Then it has only the stock fields, so a stock receiver parses and verifies it."""
+    asking = agent("agent_a", 19164, "ap3_initiator", Remember(), *generate_keypair(), DataStructure.CUSTOMER_LIST)
+    intent = asking._core._build_signed_intent(
+        session_id="s1", peer_url="http://localhost:19165", payload="hi", expiry_hours=1
+    )
+    assert set(intent.model_dump(mode="json", exclude_none=True)) == STOCK_INTENT_FIELDS
+
+
+def test_changing_purpose_after_signing_breaks_the_signature():
+    """Given an intent signed with purpose credit_underwriting. When the purpose is edited. Then the signature no longer verifies."""
+    private_key, public_key = generate_keypair()
+    asking = agent("agent_a", 19164, "ap3_initiator", Remember(), private_key, public_key, DataStructure.CUSTOMER_LIST)
+    intent = asking._core._build_signed_intent(
+        session_id="s1", peer_url="http://localhost:19165", payload="hi", expiry_hours=1,
+        purpose="credit_underwriting", legal_basis="borrower_consent:c-42",
+    )
+    assert intent.verify_signature(public_key)
+    assert not intent.model_copy(update={"purpose": "marketing"}).verify_signature(public_key)
+
+
+@pytest.mark.asyncio
+async def test_receiver_accepts_only_its_allowed_purposes():
+    """Given C allows only credit_underwriting. When A asks with that purpose, with marketing, and with none. Then the first runs and C's operation sees the purpose, and the other two are PURPOSE_NOT_ALLOWED with C's operation not entered."""
+    receiver_op = Remember()
+    asking = agent("agent_a", 19166, "ap3_initiator", Remember(), *generate_keypair(), DataStructure.CUSTOMER_LIST)
+    answering = agent(
+        "agent_c", 19167, "ap3_receiver", receiver_op, *generate_keypair(), DataStructure.BLACKLIST,
+        allowed_purposes={"credit_underwriting"},
+    )
+    url = "http://localhost:19167"
+    async with asking.serving(), answering.serving():
+        await asking.run_intent(
+            peer_url=url, inputs={"send": True},
+            purpose="credit_underwriting", legal_basis="borrower_consent:c-42",
+        )
+        assert receiver_op.contexts[-1]["purpose"] == "credit_underwriting"
+        assert receiver_op.contexts[-1]["legal_basis"] == "borrower_consent:c-42"
+        receiver_op.received = False
+        for purpose in ("marketing", None):
+            with pytest.raises(PrivacyProtocolError) as caught:
+                await asking.run_intent(peer_url=url, inputs={"send": True}, purpose=purpose)
+            assert caught.value.error.error_code == "PURPOSE_NOT_ALLOWED"
+    assert receiver_op.received is False
+
+
+@pytest.mark.asyncio
+async def test_receiver_without_a_purpose_list_accepts_any_purpose():
+    """Given C sets no allowed_purposes. When A asks with a purpose. Then the session runs as before."""
+    asking = agent("agent_a", 19168, "ap3_initiator", Remember(), *generate_keypair(), DataStructure.CUSTOMER_LIST)
+    answering = agent("agent_c", 19165, "ap3_receiver", Remember(), *generate_keypair(), DataStructure.BLACKLIST)
+    async with asking.serving(), answering.serving():
+        result = await asking.run_intent(
+            peer_url="http://localhost:19165", inputs={"send": True}, purpose="anything"
+        )
+    assert result.result_data is not None
+
+
+class FailOnReceive(Remember):
+    def __init__(self, error):
+        super().__init__()
+        self.error = error
+
+    def on_process(self, role, state, message, config, context):
+        raise self.error
+
+
+@pytest.mark.asyncio
+async def test_operation_refusal_reaches_the_initiator_with_its_code():
+    """Given C's operation raises OperationRefusal PERIOD_ROLLING. When A asks. Then A gets PERIOD_ROLLING and C's message, not OPERATION_ERROR."""
+    asking = agent("agent_a", 19169, "ap3_initiator", Remember(), *generate_keypair(), DataStructure.CUSTOMER_LIST)
+    answering = agent(
+        "agent_c", 19170, "ap3_receiver",
+        FailOnReceive(OperationRefusal("PERIOD_ROLLING", "new period list in 5s")),
+        *generate_keypair(), DataStructure.BLACKLIST,
+    )
+    async with asking.serving(), answering.serving():
+        with pytest.raises(PrivacyProtocolError) as caught:
+            await asking.run_intent(peer_url="http://localhost:19170", inputs={"send": True})
+    assert caught.value.error.error_code == "PERIOD_ROLLING"
+    assert caught.value.error.error_message == "new period list in 5s"
+
+
+@pytest.mark.asyncio
+async def test_any_other_operation_error_stays_generic():
+    """Given C's operation raises ValueError with internal detail. When A asks. Then A gets OPERATION_ERROR, and the detail does not leave C."""
+    asking = agent("agent_a", 19171, "ap3_initiator", Remember(), *generate_keypair(), DataStructure.CUSTOMER_LIST)
+    answering = agent(
+        "agent_c", 19172, "ap3_receiver", FailOnReceive(ValueError("db password rejected")),
+        *generate_keypair(), DataStructure.BLACKLIST,
+    )
+    async with asking.serving(), answering.serving():
+        with pytest.raises(PrivacyProtocolError) as caught:
+            await asking.run_intent(peer_url="http://localhost:19172", inputs={"send": True})
+    assert caught.value.error.error_code == "OPERATION_ERROR"
+    assert "password" not in caught.value.error.error_message
+
+
+def test_refusal_code_must_be_upper_snake_case():
+    """Given a lowercase or overlong code. When OperationRefusal is built. Then ValueError."""
+    with pytest.raises(ValueError):
+        OperationRefusal("period rolling")
+    with pytest.raises(ValueError):
+        OperationRefusal("A" * 65)

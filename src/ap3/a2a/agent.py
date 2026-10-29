@@ -100,6 +100,7 @@ class PrivacyAgent(ProtocolHandler):
             Callable[[Any, Any, Optional[str]], tuple[float, str]]
         ] = None,
         allow_private_initiator_urls: bool = False,
+        allowed_purposes: Optional[set[str]] = None,
     ) -> None:
         if role not in ("ap3_initiator", "ap3_receiver"):
             raise ValueError(f"unknown role: {role}")
@@ -164,6 +165,7 @@ class PrivacyAgent(ProtocolHandler):
             config_provider=receiver_config_provider,
             compatibility_scorer=compatibility_scorer,
             allow_private_initiator_urls=allow_private_initiator_urls,
+            allowed_purposes=allowed_purposes,
         )
 
         # Import A2A/HTTP server dependencies lazily so importing `ap3` does
@@ -256,6 +258,8 @@ class PrivacyAgent(ProtocolHandler):
         inputs: Any,
         expiry_hours: int = DEFAULT_INTENT_EXPIRY_HOURS,
         refresh_peer: bool = False,
+        purpose: Optional[str] = None,
+        legal_basis: Optional[str] = None,
     ) -> PrivacyResultDirective:
         if self._role != "ap3_initiator":
             raise RuntimeError("run_intent() is only valid for initiators")
@@ -264,6 +268,8 @@ class PrivacyAgent(ProtocolHandler):
             inputs=inputs,
             expiry_hours=expiry_hours,
             refresh_peer=refresh_peer,
+            purpose=purpose,
+            legal_basis=legal_basis,
         )
 
     async def run_intents(
@@ -275,6 +281,9 @@ class PrivacyAgent(ProtocolHandler):
         refresh_peer: bool = False,
         timeout_s: Optional[float] = None,
         max_concurrency: Optional[int] = None,
+        deadline_s: Optional[float] = None,
+        purpose: Optional[str] = None,
+        legal_basis: Optional[str] = None,
     ) -> dict[str, PrivacyResultDirective | BaseException]:
         """Same contract as _ProtocolCore.run_intents. Initiator only."""
         if self._role != "ap3_initiator":
@@ -286,6 +295,9 @@ class PrivacyAgent(ProtocolHandler):
             refresh_peer=refresh_peer,
             timeout_s=timeout_s,
             max_concurrency=max_concurrency,
+            deadline_s=deadline_s,
+            purpose=purpose,
+            legal_basis=legal_basis,
         )
 
     # ---- ProtocolHandler impl (inbound) ------------------------------
