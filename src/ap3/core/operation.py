@@ -9,10 +9,28 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+import re
 import uuid
 from typing import Any, ClassVar, Dict, Optional
 
 OperationInputs = Dict[str, Any] | list[Any] | tuple[Any, ...] | str | int | float | bool | None
+
+_REFUSAL_CODE = re.compile(r"[A-Z][A-Z0-9_]{1,63}")
+
+
+class OperationRefusal(Exception):
+    """Raised by an operation to refuse with a code the initiator sees.
+
+    Any other exception still reaches the initiator as OPERATION_ERROR, so only
+    what the operation chooses to say leaves the receiver.
+    """
+
+    def __init__(self, code: str, message: str = "") -> None:
+        if not _REFUSAL_CODE.fullmatch(code):
+            raise ValueError("refusal code must be UPPER_SNAKE_CASE, 2 to 64 characters")
+        super().__init__(message or code)
+        self.code = code
+        self.message = message[:200]
 
 @dataclass
 class OperationResult:

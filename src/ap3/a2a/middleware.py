@@ -126,6 +126,7 @@ class AP3Middleware(ProtocolHandler):
             Callable[[Any, Any, Optional[str]], tuple[float, str]]
         ] = None,
         allow_private_initiator_urls: bool = False,
+        allowed_purposes: Optional[set[str]] = None,
     ) -> None:
         if identity.role not in ("ap3_initiator", "ap3_receiver"):
             raise ValueError(f"unknown role: {identity.role}")
@@ -144,6 +145,7 @@ class AP3Middleware(ProtocolHandler):
             config_provider=receiver_config_provider,
             compatibility_scorer=compatibility_scorer,
             allow_private_initiator_urls=allow_private_initiator_urls,
+            allowed_purposes=allowed_purposes,
         )
 
     async def run_intent(
@@ -152,11 +154,47 @@ class AP3Middleware(ProtocolHandler):
         peer_url: str,
         inputs: Any,
         expiry_hours: int = DEFAULT_INTENT_EXPIRY_HOURS,
+        refresh_peer: bool = False,
+        purpose: Optional[str] = None,
+        legal_basis: Optional[str] = None,
     ) -> PrivacyResultDirective:
         if self._id.role != "ap3_initiator":
             raise RuntimeError("run_intent() is only valid for initiators")
         return await self._core.run_intent(
-            peer_url=peer_url, inputs=inputs, expiry_hours=expiry_hours
+            peer_url=peer_url,
+            inputs=inputs,
+            expiry_hours=expiry_hours,
+            refresh_peer=refresh_peer,
+            purpose=purpose,
+            legal_basis=legal_basis,
+        )
+
+    async def run_intents(
+        self,
+        *,
+        peer_urls: list[str],
+        inputs: Any,
+        expiry_hours: int = DEFAULT_INTENT_EXPIRY_HOURS,
+        refresh_peer: bool = False,
+        timeout_s: Optional[float] = None,
+        max_concurrency: Optional[int] = None,
+        deadline_s: Optional[float] = None,
+        purpose: Optional[str] = None,
+        legal_basis: Optional[str] = None,
+    ) -> dict[str, PrivacyResultDirective | BaseException]:
+        """Same contract as _ProtocolCore.run_intents. Initiator only."""
+        if self._id.role != "ap3_initiator":
+            raise RuntimeError("run_intents() is only valid for initiators")
+        return await self._core.run_intents(
+            peer_urls=peer_urls,
+            inputs=inputs,
+            expiry_hours=expiry_hours,
+            refresh_peer=refresh_peer,
+            timeout_s=timeout_s,
+            max_concurrency=max_concurrency,
+            deadline_s=deadline_s,
+            purpose=purpose,
+            legal_basis=legal_basis,
         )
 
     async def handle_envelope(self, envelope: ProtocolEnvelope) -> Optional[ProtocolEnvelope]:

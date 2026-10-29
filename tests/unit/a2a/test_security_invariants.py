@@ -17,6 +17,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from ap3.a2a.agent import PrivacyAgent
+from ap3.services.commitment import CommitmentMetadataSystem
 from ap3.a2a.client import PeerInfo
 from ap3.a2a.wire import ProtocolEnvelope
 from ap3.signing.canonical import canonical_json_bytes
@@ -97,15 +98,20 @@ def _make_initiator_keys() -> tuple[bytes, bytes]:
 
 
 def _initiator_peer_info(
-    initiator_pub: bytes, *, agent_url: str = INITIATOR_URL
+    initiator_pub: bytes, *, initiator_priv: bytes | None = None, agent_url: str = INITIATOR_URL
 ) -> PeerInfo:
     """Build a PeerInfo for the initiator with shape compatible with the receiver."""
+    meta = _commitment()
+    # An unsigned card now fails before the refusal this test is about.
+    if initiator_priv is not None:
+        sig = CommitmentMetadataSystem.sign_commitment(meta, initiator_priv)
+        meta = meta.model_copy(update={"signature": sig})
     return PeerInfo(
         agent_url=agent_url,
         ap3_params=AP3ExtensionParameters(
             roles=["ap3_initiator"],
             supported_operations=["PSI"],
-            commitments=[_commitment()],
+            commitments=[meta],
         ),
         wire_version="1.0",
         public_key=initiator_pub,
@@ -178,7 +184,7 @@ async def test_tampered_msg1_payload_is_refused(monkeypatch):
     """Mutating envelope.payload after signing must surface INTENT_PAYLOAD_MISMATCH."""
     agent, _, _ = _make_receiver()
     init_priv, init_pub = _make_initiator_keys()
-    _patch_resolve(monkeypatch, agent, _initiator_peer_info(init_pub))
+    _patch_resolve(monkeypatch, agent, _initiator_peer_info(init_pub, initiator_priv=init_priv))
 
     payload = "msg1_bytes_v1"
     intent = _signed_intent(
@@ -211,7 +217,7 @@ async def test_replay_of_same_intent_is_refused(monkeypatch):
     """
     agent, _, _ = _make_receiver()
     init_priv, init_pub = _make_initiator_keys()
-    _patch_resolve(monkeypatch, agent, _initiator_peer_info(init_pub))
+    _patch_resolve(monkeypatch, agent, _initiator_peer_info(init_pub, initiator_priv=init_priv))
 
     payload = "msg1_bytes_replay"
     intent = _signed_intent(
@@ -244,7 +250,7 @@ async def test_unsupported_wire_version_is_refused(monkeypatch):
     """A peer advertising a future/unknown wire version must be refused."""
     agent, _, _ = _make_receiver()
     init_priv, init_pub = _make_initiator_keys()
-    _patch_resolve(monkeypatch, agent, _initiator_peer_info(init_pub))
+    _patch_resolve(monkeypatch, agent, _initiator_peer_info(init_pub, initiator_priv=init_priv))
 
     payload = "msg1_v2"
     intent = _signed_intent(
@@ -267,7 +273,7 @@ async def test_tampered_subsequent_envelope_is_refused(monkeypatch):
     """
     agent, _, _ = _make_receiver(sanction_list=["Jane Smith,S001,456 Elm St"])
     init_priv, init_pub = _make_initiator_keys()
-    _patch_resolve(monkeypatch, agent, _initiator_peer_info(init_pub))
+    _patch_resolve(monkeypatch, agent, _initiator_peer_info(init_pub, initiator_priv=init_priv))
 
     session_id = "sid-tamper-subseq"
     commit_b = b"1" * HASH_SIZE
@@ -308,7 +314,7 @@ async def test_subsequent_intent_signed_by_different_key_is_refused(monkeypatch)
     agent, _, _ = _make_receiver(sanction_list=["Jane Smith,S001"])
     legit_priv, legit_pub = _make_initiator_keys()
     other_priv, _other_pub = _make_initiator_keys()
-    _patch_resolve(monkeypatch, agent, _initiator_peer_info(legit_pub))
+    _patch_resolve(monkeypatch, agent, _initiator_peer_info(legit_pub, initiator_priv=legit_priv))
 
     session_id = "sid-signer-pin"
     commit_b = b"1" * HASH_SIZE
@@ -374,7 +380,7 @@ async def test_subsequent_envelope_without_intent_is_refused(monkeypatch):
     member = "Jane Smith,S001,456 Elm St"
     agent, _, _ = _make_receiver(sanction_list=[member])
     init_priv, init_pub = _make_initiator_keys()
-    _patch_resolve(monkeypatch, agent, _initiator_peer_info(init_pub))
+    _patch_resolve(monkeypatch, agent, _initiator_peer_info(init_pub, initiator_priv=init_priv))
 
     session_id = "sid-no-intent"
     initiator, internal_sid, msg1_payload = await _open_genuine_session(
@@ -416,7 +422,7 @@ async def test_unsigned_reinit_cannot_take_over_open_session(monkeypatch):
     member = "Jane Smith,S001,456 Elm St"
     agent, _, _ = _make_receiver(sanction_list=[member])
     init_priv, init_pub = _make_initiator_keys()
-    _patch_resolve(monkeypatch, agent, _initiator_peer_info(init_pub))
+    _patch_resolve(monkeypatch, agent, _initiator_peer_info(init_pub, initiator_priv=init_priv))
 
     session_id = "sid-takeover"
     await _open_genuine_session(
@@ -442,7 +448,7 @@ async def test_signed_reinit_on_open_session_is_refused(monkeypatch):
     member = "Jane Smith,S001,456 Elm St"
     agent, _, _ = _make_receiver(sanction_list=[member])
     init_priv, init_pub = _make_initiator_keys()
-    _patch_resolve(monkeypatch, agent, _initiator_peer_info(init_pub))
+    _patch_resolve(monkeypatch, agent, _initiator_peer_info(init_pub, initiator_priv=init_priv))
 
     session_id = "sid-signed-reinit"
     await _open_genuine_session(
@@ -464,7 +470,7 @@ async def test_failed_round_clears_both_session_layers(monkeypatch):
     member = "Jane Smith,S001,456 Elm St"
     agent, _, _ = _make_receiver(sanction_list=[member])
     init_priv, init_pub = _make_initiator_keys()
-    _patch_resolve(monkeypatch, agent, _initiator_peer_info(init_pub))
+    _patch_resolve(monkeypatch, agent, _initiator_peer_info(init_pub, initiator_priv=init_priv))
 
     session_id = "sid-cleanup"
     await _open_genuine_session(
@@ -494,7 +500,7 @@ async def test_intent_operation_type_mismatch_is_refused(monkeypatch):
     """
     agent, _, _ = _make_receiver()
     init_priv, init_pub = _make_initiator_keys()
-    _patch_resolve(monkeypatch, agent, _initiator_peer_info(init_pub))
+    _patch_resolve(monkeypatch, agent, _initiator_peer_info(init_pub, initiator_priv=init_priv))
 
     payload = "msg1_optype"
     session_id = "sid-optype"
@@ -654,7 +660,7 @@ async def test_url_trailing_slash_does_not_break_participants_check(monkeypatch)
     URL must still pass the receiver's participants check."""
     agent, _, _ = _make_receiver()
     init_priv, init_pub = _make_initiator_keys()
-    _patch_resolve(monkeypatch, agent, _initiator_peer_info(init_pub))
+    _patch_resolve(monkeypatch, agent, _initiator_peer_info(init_pub, initiator_priv=init_priv))
 
     payload = "msg1_url"
     # Initiator signs with `RECEIVER_URL + "/"`, receiver self_url is RECEIVER_URL.
@@ -780,7 +786,7 @@ async def test_concurrent_receivers_for_same_session_are_serialized(monkeypatch)
     """
     agent, _, _ = _make_receiver()
     init_priv, init_pub = _make_initiator_keys()
-    _patch_resolve(monkeypatch, agent, _initiator_peer_info(init_pub))
+    _patch_resolve(monkeypatch, agent, _initiator_peer_info(init_pub, initiator_priv=init_priv))
 
     payload = "msg1_concurrent"
     intent = _signed_intent(
@@ -810,7 +816,7 @@ async def test_malformed_expiry_field_is_refused(monkeypatch):
     """7: garbage `expiry` makes the intent treat itself as expired and refuses."""
     agent, _, _ = _make_receiver()
     init_priv, init_pub = _make_initiator_keys()
-    _patch_resolve(monkeypatch, agent, _initiator_peer_info(init_pub))
+    _patch_resolve(monkeypatch, agent, _initiator_peer_info(init_pub, initiator_priv=init_priv))
 
     payload = "msg1_exp"
     intent = _signed_intent(
@@ -948,7 +954,7 @@ async def test_intent_with_three_participants_in_dict_rejected_by_framework(monk
     """
     agent, _, _ = _make_receiver()
     init_priv, init_pub = _make_initiator_keys()
-    _patch_resolve(monkeypatch, agent, _initiator_peer_info(init_pub))
+    _patch_resolve(monkeypatch, agent, _initiator_peer_info(init_pub, initiator_priv=init_priv))
 
     # Build a valid intent, then mutate its serialized form to bypass the
     # pydantic constraint. The signature will still match the original
@@ -1039,7 +1045,7 @@ async def test_ssrf_guard_bypass_with_allow_private_initiator_urls(monkeypatch):
     _patch_resolve(
         monkeypatch,
         agent,
-        _initiator_peer_info(init_pub, agent_url="http://localhost:10002"),
+        _initiator_peer_info(init_pub, initiator_priv=init_priv, agent_url="http://localhost:10002"),
     )
 
     payload = "loopback_ok"

@@ -24,7 +24,8 @@ from ap3.a2a.card import normalize_url
 from ap3.a2a.client import PeerClient, PeerInfo
 from ap3.a2a._url_safety import UnsafeInitiatorURL, assert_safe_initiator_url
 from ap3.a2a.wire import AP3_WIRE_VERSION, ProtocolEnvelope
-from ap3.core.operation import Operation
+from ap3.core.operation import Operation, OperationRefusal
+from ap3.services.commitment import CommitmentMetadataSystem
 from ap3.services.compatibility import CommitmentCompatibilityChecker
 from ap3.signing.canonical import canonical_json_bytes
 from ap3.types import (
@@ -85,6 +86,7 @@ class _ProtocolCore:
             Callable[[Any, Any, Optional[str]], tuple[float, str]]
         ] = None,
         allow_private_initiator_urls: bool = False,
+        allowed_purposes: Optional[set[str]] = None,
     ) -> None:
         self._operation = operation
         self._operation_type = operation_type
@@ -97,6 +99,7 @@ class _ProtocolCore:
         self._config_provider = config_provider
         self._compatibility_scorer = compatibility_scorer
         self._allow_private_initiator_urls = allow_private_initiator_urls
+        self._allowed_purposes = frozenset(allowed_purposes) if allowed_purposes is not None else None
 
         # Anti-replay cache for first-round intents (receiver-side).
         # key -> expires_at_utc
@@ -120,6 +123,9 @@ class _ProtocolCore:
         peer_url: str,
         inputs: Any,
         expiry_hours: int = DEFAULT_INTENT_EXPIRY_HOURS,
+        refresh_peer: bool = False,
+        purpose: Optional[str] = None,
+        legal_basis: Optional[str] = None,
     ) -> PrivacyResultDirective:
         """Full initiator round-trip against one peer.
 
@@ -129,11 +135,27 @@ class _ProtocolCore:
         `on_process` alternates `done=False` with fresh `outgoing` runs
         as many rounds as it needs. Raises PrivacyError on peer refusal,
         missing reply, or the round cap.
+
+        Given the peer card. When a commitment signature does not verify,
+        raise COMMITMENT_SIGNATURE_INVALID and send nothing. The checked
+        commitments are the context passed to operation.start. refresh_peer
+        forces a new card fetch. purpose and legal_basis go into every signed intent.
         """
-        peer = await self._peer_client.resolve_peer(peer_url)
+        peer = await self._peer_client.resolve_peer(peer_url, force_refresh=refresh_peer)
+        # Changed after signing: stop here, the operation is not started.
+        bad = self._commitment_error(peer)
+        if bad is not None:
+            raise PrivacyProtocolError(bad)
         self._assert_compatible(peer)
 
-        start = self._operation.start(role="initiator", inputs=inputs)
+        start = self._operation.start(
+            role="initiator",
+            inputs=inputs,
+            context={
+                "peer_url": peer_url,
+                "peer_commitments": list(peer.ap3_params.commitments),
+            },
+        )
         internal_sid = start["session_id"]
         outgoing = start.get("outgoing")
         if start.get("done"):
@@ -152,7 +174,32 @@ class _ProtocolCore:
             )
 
         wire_sid = outgoing.get("protocol_session") or internal_sid
+        try:
+            return await self._run_rounds(
+                peer_url=peer_url,
+                internal_sid=internal_sid,
+                wire_sid=wire_sid,
+                outgoing=outgoing,
+                expiry_hours=expiry_hours,
+                purpose=purpose,
+                legal_basis=legal_basis,
+            )
+        except BaseException:
+            # Includes cancellation from a timeout. A finished session is already gone.
+            self._operation.abort(internal_sid)
+            raise
 
+    async def _run_rounds(
+        self,
+        *,
+        peer_url: str,
+        internal_sid: str,
+        wire_sid: str,
+        outgoing: Any,
+        expiry_hours: int,
+        purpose: Optional[str] = None,
+        legal_basis: Optional[str] = None,
+    ) -> PrivacyResultDirective:
         for round_num in range(MAX_ROUNDS):
             # Fresh, payload-bound intent per outbound envelope. Each intent's
             # payload_hash binds *this* envelope's payload, so any mid-session
@@ -162,13 +209,15 @@ class _ProtocolCore:
                 peer_url=peer_url,
                 payload=outgoing["message"],
                 expiry_hours=expiry_hours,
+                purpose=purpose,
+                legal_basis=legal_basis,
             )
             envelope = ProtocolEnvelope(
                 operation=self._operation.operation_id,
                 phase=outgoing.get("phase", f"round{round_num}"),
                 session_id=wire_sid,
                 payload=outgoing["message"],
-                privacy_intent=intent.model_dump(mode="json"),
+                privacy_intent=intent.model_dump(mode="json", exclude_none=True),
             )
             reply = await self._peer_client.send_envelope(
                 peer_url=peer_url,
@@ -348,16 +397,8 @@ class _ProtocolCore:
                 logger.exception(
                     "operation.process failed for wire_sid=%s", wire_sid[:8]
                 )
-                del exc
                 self._rx_sessions.pop(wire_sid, None)
-                return self._refuse(
-                    envelope,
-                    PrivacyError(
-                        error_code="OPERATION_ERROR",
-                        error_message="internal operation failure",
-                        operation_type=self._operation_type,
-                    ),
-                )
+                return self._refuse(envelope, self._operation_error(exc))
             if result.get("done"):
                 self._rx_sessions.pop(wire_sid, None)
 
@@ -394,6 +435,113 @@ class _ProtocolCore:
             payload={},
             error=error.model_dump(mode="json"),
         )
+
+    async def run_intents(
+        self,
+        *,
+        peer_urls: list[str],
+        inputs: Any,
+        expiry_hours: int = DEFAULT_INTENT_EXPIRY_HOURS,
+        refresh_peer: bool = False,
+        timeout_s: Optional[float] = None,
+        max_concurrency: Optional[int] = None,
+        deadline_s: Optional[float] = None,
+        purpose: Optional[str] = None,
+        legal_basis: Optional[str] = None,
+    ) -> dict[str, PrivacyResultDirective | BaseException]:
+        """Given one URL per peer. When some peers fail or run past timeout_s. Then every URL still has an entry: its result, or its exception.
+
+        Each call is one two-party intent. A timeout is PEER_TIMEOUT for that URL.
+        timeout_s starts when the session opens, not while it waits for a slot.
+        deadline_s bounds the whole call, slot waits included. A URL still running
+        or queued at the deadline is DEADLINE_EXCEEDED.
+        """
+        if len(set(peer_urls)) != len(peer_urls):
+            raise ValueError("peer_urls has duplicates; results are keyed by URL")
+        if max_concurrency is not None and max_concurrency < 1:
+            raise ValueError("max_concurrency must be at least 1")
+        if deadline_s is not None and deadline_s <= 0:
+            raise ValueError("deadline_s must be positive")
+        slots = asyncio.Semaphore(max_concurrency or max(len(peer_urls), 1))
+
+        async def one(url: str) -> PrivacyResultDirective:
+            async with slots:
+                call = self.run_intent(
+                    peer_url=url,
+                    inputs=inputs,
+                    expiry_hours=expiry_hours,
+                    refresh_peer=refresh_peer,
+                    purpose=purpose,
+                    legal_basis=legal_basis,
+                )
+                if timeout_s is None:
+                    return await call
+                try:
+                    return await asyncio.wait_for(call, timeout_s)
+                except asyncio.TimeoutError:
+                    raise PrivacyProtocolError(
+                        PrivacyError(
+                            error_code="PEER_TIMEOUT",
+                            error_message=f"no result from {url} within {timeout_s}s",
+                            operation_type=self._operation_type,
+                        )
+                    ) from None
+
+        if deadline_s is None:
+            results = await asyncio.gather(*(one(url) for url in peer_urls), return_exceptions=True)
+            return dict(zip(peer_urls, results))
+
+        tasks = {url: asyncio.ensure_future(one(url)) for url in peer_urls}
+        try:
+            _, late = await asyncio.wait(tasks.values(), timeout=deadline_s)
+        finally:
+            for task in tasks.values():
+                task.cancel()
+            # Let cancelled run_intent calls abort their sessions before returning.
+            await asyncio.gather(*tasks.values(), return_exceptions=True)
+
+        out: dict[str, PrivacyResultDirective | BaseException] = {}
+        for url, task in tasks.items():
+            if task in late:
+                out[url] = PrivacyProtocolError(
+                    PrivacyError(
+                        error_code="DEADLINE_EXCEEDED",
+                        error_message=f"no result from {url} within the {deadline_s}s deadline",
+                        operation_type=self._operation_type,
+                    )
+                )
+                continue
+            exc = task.exception()
+            out[url] = exc if exc is not None else task.result()
+        return out
+
+    def _operation_error(self, exc: Exception) -> PrivacyError:
+        """Given an exception from the operation. When it is OperationRefusal. Then its code and message, else the generic OPERATION_ERROR."""
+        if isinstance(exc, OperationRefusal):
+            return PrivacyError(
+                error_code=exc.code,
+                error_message=exc.message,
+                operation_type=self._operation_type,
+            )
+        return PrivacyError(
+            error_code="OPERATION_ERROR",
+            error_message="internal operation failure",
+            operation_type=self._operation_type,
+        )
+
+    def _commitment_error(self, peer: PeerInfo) -> Optional[PrivacyError]:
+        """Given the commitments on a peer card. When one signature fails against peer.public_key. Then COMMITMENT_SIGNATURE_INVALID, else None."""
+        for commitment in peer.ap3_params.commitments:
+            ok = CommitmentMetadataSystem.verify_commitment_signature(
+                commitment, peer.public_key
+            )
+            if not ok:
+                return PrivacyError(
+                    error_code="COMMITMENT_SIGNATURE_INVALID",
+                    error_message="commitment signature is not valid",
+                    operation_type=self._operation_type,
+                )
+        return None
 
     def _assert_compatible(self, peer: PeerInfo) -> None:
         if self._compatibility_scorer is None:
@@ -519,6 +667,23 @@ class _ProtocolCore:
                     ),
                 )
 
+        # Initiator's card. Same check, and operation.receive is not called.
+        bad = self._commitment_error(peer)
+        if bad is not None:
+            return self._refuse(envelope, bad)
+
+        # The signature covers purpose, so this reads what the initiator signed.
+        if self._allowed_purposes is not None and intent.purpose not in self._allowed_purposes:
+            logger.warning("intent purpose not allowed: %r", intent.purpose)
+            return self._refuse(
+                envelope,
+                PrivacyError(
+                    error_code="PURPOSE_NOT_ALLOWED",
+                    error_message=f"purpose {intent.purpose!r} is not accepted by this receiver",
+                    operation_type=self._operation_type,
+                ),
+            )
+
         # Shape-level checks + payload binding + replay.
         refusal = self._check_intent_consistency(envelope, intent, peer.public_key)
         if refusal is not None:
@@ -536,19 +701,12 @@ class _ProtocolCore:
                 role="receiver",
                 message=message,
                 config=config,
+                context={"purpose": intent.purpose, "legal_basis": intent.legal_basis},
                 session_id=wire_sid,
             )
         except Exception as exc:
             logger.exception("operation.receive failed for wire_sid=%s", wire_sid[:8])
-            del exc
-            return self._refuse(
-                envelope,
-                PrivacyError(
-                    error_code="OPERATION_ERROR",
-                    error_message="internal operation failure",
-                    operation_type=self._operation_type,
-                ),
-            )
+            return self._refuse(envelope, self._operation_error(exc))
         if not result.get("done"):
             self._rx_sessions[wire_sid] = _ReceiverSession(
                 internal_sid=result["session_id"],
@@ -692,6 +850,8 @@ class _ProtocolCore:
         peer_url: str,
         payload: Any,
         expiry_hours: int,
+        purpose: Optional[str] = None,
+        legal_basis: Optional[str] = None,
     ) -> PrivacyIntentDirective:
         expiry = datetime.now(timezone.utc) + timedelta(hours=expiry_hours)
         intent = PrivacyIntentDirective(
@@ -708,6 +868,8 @@ class _ProtocolCore:
             nonce=uuid.uuid4().hex,
             payload_hash=self._hash_payload(payload),
             expiry=expiry.isoformat(),
+            purpose=purpose,
+            legal_basis=legal_basis,
             signature=None,
         )
         intent.signature = intent.sign(self._private_key)

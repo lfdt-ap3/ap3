@@ -105,6 +105,11 @@ class CommitmentMetadata(BaseModel):
         default=None,
         description="Expiry time in ISO 8601 format"
     )
+    # Signed with the other fields. Left unset on old cards, and those still verify.
+    operation_params: Optional[dict[str, str]] = Field(
+        default=None,
+        description="Public values an operation publishes, signed with the commitment",
+    )
     signature: Optional[str] = Field(
         default=None,
         description="Cryptographic signature over the commitment"
