@@ -26,6 +26,7 @@ from ap3.a2a._url_safety import UnsafeInitiatorURL, assert_safe_initiator_url
 from ap3.a2a.wire import AP3_WIRE_VERSION, ProtocolEnvelope
 from ap3.core.operation import Operation
 from ap3.services.compatibility import CommitmentCompatibilityChecker
+from ap3.services.commitment import CommitmentMetadataSystem
 from ap3.signing.canonical import canonical_json_bytes
 from ap3.types import (
     OperationProofs,
@@ -129,11 +130,26 @@ class _ProtocolCore:
         `on_process` alternates `done=False` with fresh `outgoing` runs
         as many rounds as it needs. Raises PrivacyError on peer refusal,
         missing reply, or the round cap.
+
+        Given the peer card. When a commitment signature does not verify,
+        raise COMMITMENT_SIGNATURE_INVALID and send nothing. The checked
+        commitments are the context passed to operation.start.
         """
         peer = await self._peer_client.resolve_peer(peer_url)
         self._assert_compatible(peer)
+        # Changed after signing: stop here, the operation is not started.
+        bad = self._commitment_error(peer)
+        if bad is not None:
+            raise PrivacyProtocolError(bad)
 
-        start = self._operation.start(role="initiator", inputs=inputs)
+        start = self._operation.start(
+            role="initiator",
+            inputs=inputs,
+            context={
+                "peer_url": peer_url,
+                "peer_commitments": list(peer.ap3_params.commitments),
+            },
+        )
         internal_sid = start["session_id"]
         outgoing = start.get("outgoing")
         if start.get("done"):
@@ -417,6 +433,20 @@ class _ProtocolCore:
                 )
             )
 
+    def _commitment_error(self, peer: PeerInfo) -> Optional[PrivacyError]:
+        """Given the commitments on a peer card. When one signature fails against peer.public_key. Then COMMITMENT_SIGNATURE_INVALID, else None."""
+        for commitment in peer.ap3_params.commitments:
+            ok = CommitmentMetadataSystem.verify_commitment_signature(
+                commitment, peer.public_key
+            )
+            if not ok:
+                return PrivacyError(
+                    error_code="COMMITMENT_SIGNATURE_INVALID",
+                    error_message="commitment signature is not valid",
+                    operation_type=self._operation_type,
+                )
+        return None
+
     async def _open_receiver_session(
         self,
         envelope: ProtocolEnvelope,
@@ -518,6 +548,11 @@ class _ProtocolCore:
                         operation_type=self._operation_type,
                     ),
                 )
+
+        # Initiator's card. Same check, and operation.receive is not called.
+        bad = self._commitment_error(peer)
+        if bad is not None:
+            return self._refuse(envelope, bad)
 
         # Shape-level checks + payload binding + replay.
         refusal = self._check_intent_consistency(envelope, intent, peer.public_key)
