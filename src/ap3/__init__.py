@@ -4,7 +4,7 @@
 - Each Operation instance owns its own session state — no registry needed.
 """
 
-from ap3.core import Operation, OperationResult, OperationInputs
+from ap3.core import Operation, OperationResult, OperationInputs, OperationRefusal
 from ap3.types import PrivacyIntentDirective, PrivacyResultDirective, PrivacyError, PrivacyViolationError
 from ap3.services import CommitmentMetadataSystem, CommitmentCompatibilityChecker, RemoteAgentDiscoveryService
 from ap3 import signing
@@ -14,6 +14,7 @@ __all__ = [
     "Operation",
     "OperationResult",
     "OperationInputs",
+    "OperationRefusal",
     "PrivacyIntentDirective",
     "PrivacyResultDirective",
     "PrivacyError",
