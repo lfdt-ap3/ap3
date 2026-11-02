@@ -24,7 +24,7 @@ from ap3.a2a.card import normalize_url
 from ap3.a2a.client import PeerClient, PeerInfo
 from ap3.a2a._url_safety import UnsafeInitiatorURL, assert_safe_initiator_url
 from ap3.a2a.wire import AP3_WIRE_VERSION, ProtocolEnvelope
-from ap3.core.operation import Operation
+from ap3.core.operation import Operation, OperationRefusal
 from ap3.services.compatibility import CommitmentCompatibilityChecker
 from ap3.signing.canonical import canonical_json_bytes
 from ap3.types import (
@@ -348,16 +348,8 @@ class _ProtocolCore:
                 logger.exception(
                     "operation.process failed for wire_sid=%s", wire_sid[:8]
                 )
-                del exc
                 self._rx_sessions.pop(wire_sid, None)
-                return self._refuse(
-                    envelope,
-                    PrivacyError(
-                        error_code="OPERATION_ERROR",
-                        error_message="internal operation failure",
-                        operation_type=self._operation_type,
-                    ),
-                )
+                return self._refuse(envelope, self._operation_error(exc))
             if result.get("done"):
                 self._rx_sessions.pop(wire_sid, None)
 
@@ -393,6 +385,20 @@ class _ProtocolCore:
             session_id=request.session_id,
             payload={},
             error=error.model_dump(mode="json"),
+        )
+
+    def _operation_error(self, exc: Exception) -> PrivacyError:
+        """Given an exception from the operation. When it is OperationRefusal. Then its code and message, else the generic OPERATION_ERROR."""
+        if isinstance(exc, OperationRefusal):
+            return PrivacyError(
+                error_code=exc.code,
+                error_message=exc.message,
+                operation_type=self._operation_type,
+            )
+        return PrivacyError(
+            error_code="OPERATION_ERROR",
+            error_message="internal operation failure",
+            operation_type=self._operation_type,
         )
 
     def _assert_compatible(self, peer: PeerInfo) -> None:
@@ -540,15 +546,7 @@ class _ProtocolCore:
             )
         except Exception as exc:
             logger.exception("operation.receive failed for wire_sid=%s", wire_sid[:8])
-            del exc
-            return self._refuse(
-                envelope,
-                PrivacyError(
-                    error_code="OPERATION_ERROR",
-                    error_message="internal operation failure",
-                    operation_type=self._operation_type,
-                ),
-            )
+            return self._refuse(envelope, self._operation_error(exc))
         if not result.get("done"):
             self._rx_sessions[wire_sid] = _ReceiverSession(
                 internal_sid=result["session_id"],
